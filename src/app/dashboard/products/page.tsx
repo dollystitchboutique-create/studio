@@ -172,13 +172,13 @@ export default function ProductCatalogue() {
                 <Wand2 className="mr-2 h-4 w-4" /> AI Design Lab
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-xl bg-white">
+            <DialogContent className="max-w-xl bg-white flex flex-col max-h-[90vh]">
               <DialogHeader>
                 <DialogTitle className="font-headline text-2xl text-primary flex items-center gap-2">
                   <Sparkles className="h-5 w-5" /> Design Inspiration
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              <div className="flex-1 overflow-y-auto px-1 py-4 space-y-4">
                 <div className="space-y-2">
                   <Label>Describe a new jewelry concept</Label>
                   <Input 
@@ -210,72 +210,74 @@ export default function ProductCatalogue() {
                 <Plus className="mr-2 h-4 w-4" /> Add Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl bg-white">
+            <DialogContent className="max-w-2xl bg-white flex flex-col max-h-[95vh]">
               <DialogHeader>
                 <DialogTitle className="font-headline text-2xl text-primary">Add New Item</DialogTitle>
               </DialogHeader>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-                <div className="col-span-full">
-                  <Label>Product Picture</Label>
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="mt-2 border-2 border-dashed border-primary/20 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all overflow-hidden relative"
-                  >
-                    {newProd.imageUrl ? (
-                      <img src={newProd.imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <>
-                        <Upload className="h-10 w-10 text-primary/40 mb-2" />
-                        <p className="text-sm text-muted-foreground">Click to upload or take a photo</p>
-                      </>
-                    )}
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleImageUpload}
-                      capture="environment"
-                    />
+              <div className="flex-1 overflow-y-auto px-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                  <div className="col-span-full">
+                    <Label>Product Picture</Label>
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-2 border-2 border-dashed border-primary/20 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all overflow-hidden relative"
+                    >
+                      {newProd.imageUrl ? (
+                        <img src={newProd.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <>
+                          <Upload className="h-10 w-10 text-primary/40 mb-2" />
+                          <p className="text-sm text-muted-foreground">Click to upload or take a photo</p>
+                        </>
+                      )}
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handleImageUpload}
+                        capture="environment"
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Product Name</Label>
-                  <Input value={newProd.name} onChange={e => setNewProd({...newProd, name: e.target.value})} placeholder="e.g. Sapphire Dream" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Category</Label>
-                  <select 
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    value={newProd.category} 
-                    onChange={e => setNewProd({...newProd, category: e.target.value})}
-                  >
-                    {CATEGORIES.map(cat => (
-                      <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Color / Material</Label>
-                  <Input value={newProd.color} onChange={e => setNewProd({...newProd, color: e.target.value})} placeholder="e.g. Gold / Silver" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Specification</Label>
-                  <Input value={newProd.spec} onChange={e => setNewProd({...newProd, spec: e.target.value})} placeholder="e.g. 18k Plated" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Price ($)</Label>
-                  <Input type="number" value={newProd.price} onChange={e => setNewProd({...newProd, price: e.target.value})} placeholder="0.00" />
-                </div>
-                <div className="space-y-2">
-                  <Label>SKU (Auto-suggested)</Label>
-                  <div className="flex gap-2">
-                    <Input value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
-                    <Button variant="outline" size="sm" onClick={generateSku}>Generate</Button>
+                  <div className="space-y-2">
+                    <Label>Product Name</Label>
+                    <Input value={newProd.name} onChange={e => setNewProd({...newProd, name: e.target.value})} placeholder="e.g. Sapphire Dream" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Category</Label>
+                    <select 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      value={newProd.category} 
+                      onChange={e => setNewProd({...newProd, category: e.target.value})}
+                    >
+                      {CATEGORIES.map(cat => (
+                        <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Color / Material</Label>
+                    <Input value={newProd.color} onChange={e => setNewProd({...newProd, color: e.target.value})} placeholder="e.g. Gold / Silver" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Specification</Label>
+                    <Input value={newProd.spec} onChange={e => setNewProd({...newProd, spec: e.target.value})} placeholder="e.g. 18k Plated" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Price ($)</Label>
+                    <Input type="number" value={newProd.price} onChange={e => setNewProd({...newProd, price: e.target.value})} placeholder="0.00" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>SKU (Auto-suggested)</Label>
+                    <div className="flex gap-2">
+                      <Input value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
+                      <Button variant="outline" size="sm" onClick={generateSku}>Generate</Button>
+                    </div>
                   </div>
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="pt-4 border-t mt-4">
                 <Button variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
                 <Button className="bg-primary" onClick={handleAddProduct}>Save Product</Button>
               </DialogFooter>
