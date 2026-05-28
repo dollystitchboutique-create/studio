@@ -106,7 +106,7 @@ export default function SalesHistory() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2 border-primary/10 bg-white shadow-sm flex items-center p-6">
+        <Card className="md:col-span-2 border-primary/10 bg-white shadow-sm flex items-center p-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
             <Input 
@@ -116,19 +116,19 @@ export default function SalesHistory() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <Button variant="ghost" className="ml-2 text-primary">
+          <Button variant="ghost" className="ml-2 text-primary hidden sm:flex">
             <Filter className="mr-2 h-4 w-4" /> Filter
           </Button>
         </Card>
 
-        <Card className="bg-primary text-white border-none shadow-lg">
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-2xl">
-              <DollarSign size={24} />
+        <Card className="bg-primary text-white border-none shadow-lg overflow-hidden">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl shrink-0">
+              <DollarSign size={20} />
             </div>
-            <div>
-              <p className="text-xs uppercase font-bold opacity-80">Period Revenue</p>
-              <h3 className="text-3xl font-headline">${totalRevenue.toFixed(2)}</h3>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase font-bold opacity-80 leading-none mb-1">Period Revenue</p>
+              <h3 className="text-2xl font-headline truncate leading-tight">${totalRevenue.toFixed(2)}</h3>
             </div>
           </CardContent>
         </Card>
@@ -141,49 +141,56 @@ export default function SalesHistory() {
           <Table>
             <TableHeader className="bg-primary/5">
               <TableRow>
-                <TableHead className="font-bold">Sale ID</TableHead>
-                <TableHead className="font-bold">Customer</TableHead>
-                <TableHead className="font-bold">Date & Time</TableHead>
-                <TableHead className="font-bold">Items</TableHead>
-                <TableHead className="font-bold text-right">Total</TableHead>
-                <TableHead className="font-bold">Payment</TableHead>
-                <TableHead className="font-bold text-center">Action</TableHead>
+                <TableHead className="font-bold text-xs w-[80px]">ID</TableHead>
+                <TableHead className="font-bold text-xs">Customer</TableHead>
+                <TableHead className="font-bold text-xs">Date & Time</TableHead>
+                <TableHead className="font-bold text-xs">Items</TableHead>
+                <TableHead className="font-bold text-xs text-right">Total</TableHead>
+                <TableHead className="font-bold text-xs">Payment</TableHead>
+                <TableHead className="font-bold text-xs text-center">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredSales.map((sale) => (
                 <TableRow key={sale.id} className="hover:bg-primary/[0.02]">
-                  <TableCell className="font-mono text-xs">{sale.id}</TableCell>
-                  <TableCell className="font-bold">{sale.customerName}</TableCell>
+                  <TableCell className="font-mono text-[9px] text-muted-foreground truncate max-w-[80px]">
+                    {sale.id}
+                  </TableCell>
+                  <TableCell className="font-bold text-sm">{sale.customerName}</TableCell>
                   <TableCell>
-                    <div className="flex items-center text-xs text-muted-foreground">
-                      <Calendar size={14} className="mr-1" />
-                      {sale.timestamp ? new Date(sale.timestamp).toLocaleDateString() : 'N/A'} {sale.timestamp ? new Date(sale.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    <div className="flex flex-col text-[10px] text-muted-foreground">
+                      <div className="flex items-center">
+                        <Calendar size={12} className="mr-1" />
+                        {sale.timestamp ? new Date(sale.timestamp).toLocaleDateString() : 'N/A'}
+                      </div>
+                      <div className="pl-4">
+                        {sale.timestamp ? new Date(sale.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
                       {sale.items.map((item, idx) => (
-                        <div key={idx} className="text-xs">
-                          <Badge variant="secondary" className="mr-1 font-normal bg-primary/10 text-primary border-none">{item.quantity}x</Badge>
-                          {item.name}
+                        <div key={idx} className="text-[10px] flex items-center gap-1">
+                          <Badge variant="secondary" className="px-1 py-0 h-4 min-w-4 justify-center text-[9px] bg-primary/10 text-primary border-none">{item.quantity}x</Badge>
+                          <span className="truncate max-w-[120px]">{item.name}</span>
                         </div>
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-bold text-secondary">
+                  <TableCell className="text-right font-bold text-secondary text-sm">
                     ${sale.total.toFixed(2)}
                   </TableCell>
                   <TableCell>
-                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-2">{sale.paymentMethod}</Badge>
+                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-1.5 py-0 text-[10px]">{sale.paymentMethod}</Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex justify-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => setSelectedSale(sale)} className="text-primary hover:bg-primary/5">
-                        <Eye size={16} />
+                      <Button variant="ghost" size="icon" onClick={() => setSelectedSale(sale)} className="h-7 w-7 text-primary hover:bg-primary/5">
+                        <Eye size={14} />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => softDelete(sale.id!)} className="text-muted-foreground hover:text-destructive">
-                        <Trash2 size={16} />
+                      <Button variant="ghost" size="icon" onClick={() => softDelete(sale.id!)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                        <Trash2 size={14} />
                       </Button>
                     </div>
                   </TableCell>
