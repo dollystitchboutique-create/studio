@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useState, useRef } from 'react';
-import { Product, Sale, SaleItem } from '@/lib/types';
+import { Product, Sale, SaleItem, DiscountType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
@@ -17,7 +18,9 @@ import {
   Tag as TagIcon,
   Camera,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Percent,
+  DollarSign
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -36,6 +39,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function POSCheckout() {
   const db = useFirestore();
@@ -44,7 +48,8 @@ export default function POSCheckout() {
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [customer, setCustomer] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Paylah' | 'PayNow'>('PayNow');
-  const [discount, setDiscount] = useState(0);
+  const [cartDiscount, setCartDiscount] = useState(0);
+  const [cartDiscountType, setCartDiscountType] = useState<DiscountType>('amount');
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [matchedProduct, setMatchedProduct] = useState<Product | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -62,7 +67,14 @@ export default function POSCheckout() {
     if (existing) {
       setCart(cart.map(item => item.sku === product.sku ? { ...item, quantity: item.quantity + 1 } : item));
     } else {
-      setCart([...cart, { sku: product.sku, name: product.name, price: product.price, quantity: 1 }]);
+      setCart([...cart, { 
+        sku: product.sku, 
+        name: product.name, 
+        price: product.price, 
+        quantity: 1,
+        discount: 0,
+        discountType: 'amount'
+      }]);
     }
     setSkuSearch('');
   };
@@ -143,12 +155,43 @@ export default function POSCheckout() {
     }));
   };
 
+  const updateItemDiscount = (sku: string, value: number, type: DiscountType) => {
+    setCart(cart.map(item => {
+      if (item.sku === sku) {
+        return { ...item, discount: value, discountType: type };
+      }
+      return item;
+    }));
+  };
+
   const removeFromCart = (sku: string) => {
     setCart(cart.filter(item => item.sku !== sku));
   };
 
-  const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const total = Math.max(0, subtotal - discount);
+  const calculateItemSubtotal = (item: SaleItem) => {
+    const baseTotal = item.price * item.quantity;
+    if (!item.discount) return baseTotal;
+    
+    if (item.discountType === 'amount') {
+      return Math.max(0, baseTotal - (item.discount * item.quantity));
+    } else {
+      return Math.max(0, baseTotal * (1 - item.discount / 100));
+    }
+  };
+
+  const subtotalBeforeCartDiscount = cart.reduce((acc, item) => acc + calculateItemSubtotal(item), 0);
+  
+  let totalDiscountValue = cart.reduce((acc, item) => {
+    const base = item.price * item.quantity;
+    return acc + (base - calculateItemSubtotal(item));
+  }, 0);
+
+  const cartDiscountValue = cartDiscountType === 'amount' 
+    ? cartDiscount 
+    : subtotalBeforeCartDiscount * (cartDiscount / 100);
+
+  const total = Math.max(0, subtotalBeforeCartDiscount - cartDiscountValue);
+  totalDiscountValue += cartDiscountValue;
 
   const handleCheckout = () => {
     if (cart.length === 0 || !db) return;
@@ -156,7 +199,8 @@ export default function POSCheckout() {
     const salePayload = {
       customerName: customer || 'Guest',
       paymentMethod,
-      discount,
+      discount: cartDiscount,
+      discountType: cartDiscountType,
       total,
       items: cart,
       timestamp: new Date().toISOString(),
@@ -165,7 +209,6 @@ export default function POSCheckout() {
 
     addDoc(collection(db, 'sales'), salePayload)
       .then(() => {
-        // Deduct stock for each item in cart
         cart.forEach(item => {
           const product = products.find(p => p.sku === item.sku);
           if (product && product.id) {
@@ -185,7 +228,7 @@ export default function POSCheckout() {
         toast({ title: 'Success', description: `Sale completed! Total: $${total.toFixed(2)}` });
         setCart([]);
         setCustomer('');
-        setDiscount(0);
+        setCartDiscount(0);
       })
       .catch(async (err) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -240,38 +283,68 @@ export default function POSCheckout() {
             {cart.length > 0 ? (
               <div className="divide-y divide-primary/5">
                 {cart.map((item) => (
-                  <div key={item.sku} className="flex items-center justify-between p-4 md:p-6 hover:bg-primary/[0.02] transition-colors">
-                    <div className="flex-1">
-                      <h4 className="font-bold text-lg">{item.name}</h4>
-                      <p className="text-sm text-muted-foreground font-mono">{item.sku}</p>
+                  <div key={item.sku} className="flex flex-col p-4 md:p-6 hover:bg-primary/[0.02] transition-colors gap-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-lg">{item.name}</h4>
+                        <p className="text-sm text-muted-foreground font-mono">{item.sku}</p>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div className="flex items-center bg-muted rounded-full p-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 rounded-full" 
+                            onClick={() => updateQuantity(item.sku, -1)}
+                          >
+                            <Minus size={16} />
+                          </Button>
+                          <span className="w-8 text-center font-bold">{item.quantity}</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 rounded-full"
+                            onClick={() => updateQuantity(item.sku, 1)}
+                          >
+                            <Plus size={16} />
+                          </Button>
+                        </div>
+                        <div className="w-24 text-right">
+                          <p className="font-bold text-lg">${calculateItemSubtotal(item).toFixed(2)}</p>
+                          {item.discount && item.discount > 0 ? (
+                            <p className="text-xs text-muted-foreground line-through">${(item.price * item.quantity).toFixed(2)}</p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">${item.price.toFixed(2)} ea.</p>
+                          )}
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => removeFromCart(item.sku)} className="text-muted-foreground hover:text-destructive">
+                          <Trash2 size={18} />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center bg-muted rounded-full p-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 rounded-full" 
-                          onClick={() => updateQuantity(item.sku, -1)}
+                    
+                    <div className="flex items-center gap-4 bg-primary/5 p-3 rounded-xl border border-primary/10">
+                      <Label className="text-xs font-bold uppercase text-primary/60 flex items-center gap-2">
+                         <Ticket size={12} /> Item Discount
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input 
+                          type="number" 
+                          className="h-8 w-24 bg-white text-xs" 
+                          placeholder="0.00"
+                          value={item.discount || ''}
+                          onChange={(e) => updateItemDiscount(item.sku, parseFloat(e.target.value) || 0, item.discountType || 'amount')}
+                        />
+                        <Tabs 
+                          value={item.discountType} 
+                          onValueChange={(v) => updateItemDiscount(item.sku, item.discount || 0, v as DiscountType)}
                         >
-                          <Minus size={16} />
-                        </Button>
-                        <span className="w-8 text-center font-bold">{item.quantity}</span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 rounded-full"
-                          onClick={() => updateQuantity(item.sku, 1)}
-                        >
-                          <Plus size={16} />
-                        </Button>
+                          <TabsList className="h-8 p-1">
+                            <TabsTrigger value="amount" className="h-6 px-2"><DollarSign size={12}/></TabsTrigger>
+                            <TabsTrigger value="percent" className="h-6 px-2"><Percent size={12}/></TabsTrigger>
+                          </TabsList>
+                        </Tabs>
                       </div>
-                      <div className="w-24 text-right">
-                        <p className="font-bold text-lg">${(item.price * item.quantity).toFixed(2)}</p>
-                        <p className="text-xs text-muted-foreground">${item.price.toFixed(2)} ea.</p>
-                      </div>
-                      <Button variant="ghost" size="icon" onClick={() => removeFromCart(item.sku)} className="text-muted-foreground hover:text-destructive">
-                        <Trash2 size={18} />
-                      </Button>
                     </div>
                   </div>
                 ))}
@@ -358,14 +431,20 @@ export default function POSCheckout() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Ticket size={14} className="text-primary" /> Cart Discount ($)
+                <Label className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2"><Ticket size={14} className="text-primary" /> Cart Discount</span>
+                  <Tabs value={cartDiscountType} onValueChange={(v) => setCartDiscountType(v as DiscountType)}>
+                    <TabsList className="h-7">
+                      <TabsTrigger value="amount" className="h-5 px-2 text-[10px]">$</TabsTrigger>
+                      <TabsTrigger value="percent" className="h-5 px-2 text-[10px]">%</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </Label>
                 <Input 
                   type="number" 
                   placeholder="0.00" 
-                  value={discount}
-                  onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
+                  value={cartDiscount}
+                  onChange={e => setCartDiscount(parseFloat(e.target.value) || 0)}
                   className="rounded-xl"
                 />
               </div>
@@ -390,12 +469,12 @@ export default function POSCheckout() {
 
             <div className="pt-6 border-t border-dashed border-primary/20 space-y-3">
               <div className="flex justify-between text-muted-foreground">
-                <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>Cart Subtotal</span>
+                <span>${subtotalBeforeCartDiscount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-destructive">
-                <span>Discount</span>
-                <span>-${discount.toFixed(2)}</span>
+                <span>Total Savings</span>
+                <span>-${totalDiscountValue.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-2xl font-bold text-primary pt-2">
                 <span>Total</span>
