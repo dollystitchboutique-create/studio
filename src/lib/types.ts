@@ -7,6 +7,7 @@ export type Product = {
   spec: string;
   color: string;
   price: number;
+  quantity: number;
   description: string;
   imageUrl: string;
   isDeleted: boolean;

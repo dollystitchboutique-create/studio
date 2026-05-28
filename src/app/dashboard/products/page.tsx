@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef } from 'react';
@@ -17,7 +18,8 @@ import {
   Loader2,
   Wand2,
   Upload,
-  Edit
+  Edit,
+  Package
 } from 'lucide-react';
 import {
   Dialog,
@@ -70,6 +72,7 @@ export default function ProductCatalogue() {
     spec: '',
     color: '',
     price: '',
+    quantity: '1',
     sku: '',
     imageUrl: '',
   });
@@ -137,6 +140,7 @@ export default function ProductCatalogue() {
       spec: newProd.spec,
       color: newProd.color,
       price: parseFloat(newProd.price) || 0,
+      quantity: parseInt(newProd.quantity) || 1,
       description: '',
       imageUrl: newProd.imageUrl || `https://picsum.photos/seed/${Date.now()}/600/400`,
       isDeleted: false,
@@ -147,7 +151,7 @@ export default function ProductCatalogue() {
       .then(() => {
         toast({ title: 'Success', description: 'Product added to catalogue.' });
         setIsAdding(false);
-        setNewProd({ name: '', category: CATEGORIES[0], spec: '', color: '', price: '', sku: '', imageUrl: '' });
+        setNewProd({ name: '', category: CATEGORIES[0], spec: '', color: '', price: '', quantity: '1', sku: '', imageUrl: '' });
       })
       .catch(async (err) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -169,6 +173,7 @@ export default function ProductCatalogue() {
       spec: editingProduct.spec,
       color: editingProduct.color,
       price: typeof editingProduct.price === 'string' ? parseFloat(editingProduct.price) : editingProduct.price,
+      quantity: typeof editingProduct.quantity === 'string' ? parseInt(editingProduct.quantity) : editingProduct.quantity,
       imageUrl: editingProduct.imageUrl,
     };
 
@@ -271,7 +276,7 @@ export default function ProductCatalogue() {
                       ) : (
                         <>
                           <Upload className="h-10 w-10 text-primary/40 mb-2" />
-                          <p className="text-sm text-muted-foreground">Click to upload or take a photo</p>
+                          <p className="text-sm text-muted-foreground text-center px-4">Click to upload photo<br/><span className="text-xs">(Camera prompt on mobile)</span></p>
                         </>
                       )}
                       <input 
@@ -312,6 +317,10 @@ export default function ProductCatalogue() {
                     <Input type="number" value={newProd.price} onChange={e => setNewProd({...newProd, price: e.target.value})} placeholder="0.00" />
                   </div>
                   <div className="space-y-2">
+                    <Label>Quantity (In Stock)</Label>
+                    <Input type="number" value={newProd.quantity} onChange={e => setNewProd({...newProd, quantity: e.target.value})} placeholder="1" />
+                  </div>
+                  <div className="space-y-2 col-span-full">
                     <Label>SKU (Auto-suggested)</Label>
                     <div className="flex gap-2">
                       <Input value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
@@ -329,7 +338,6 @@ export default function ProductCatalogue() {
         </div>
       </div>
 
-      {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
         <DialogContent className="max-w-2xl bg-white flex flex-col max-h-[95vh]">
           <DialogHeader>
@@ -349,7 +357,7 @@ export default function ProductCatalogue() {
                     ) : (
                       <>
                         <Upload className="h-10 w-10 text-primary/40 mb-2" />
-                        <p className="text-sm text-muted-foreground">Click to change photo</p>
+                        <p className="text-sm text-muted-foreground text-center px-4">Click to change photo<br/><span className="text-xs">(Camera prompt on mobile)</span></p>
                       </>
                     )}
                     <input 
@@ -390,6 +398,10 @@ export default function ProductCatalogue() {
                   <Input type="number" value={editingProduct.price} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value) || 0})} />
                 </div>
                 <div className="space-y-2">
+                  <Label>Quantity (In Stock)</Label>
+                  <Input type="number" value={editingProduct.quantity} onChange={e => setEditingProduct({...editingProduct, quantity: parseInt(e.target.value) || 0})} />
+                </div>
+                <div className="space-y-2 col-span-full">
                   <Label>SKU</Label>
                   <div className="flex gap-2">
                     <Input value={editingProduct.sku} onChange={e => setEditingProduct({...editingProduct, sku: e.target.value})} />
@@ -431,13 +443,21 @@ export default function ProductCatalogue() {
                   className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
                 />
                 <Badge className="absolute top-3 right-3 bg-white/90 text-primary hover:bg-white capitalize">{p.category}</Badge>
+                {p.quantity <= 3 && (
+                  <Badge variant="destructive" className="absolute top-3 left-3">Low Stock: {p.quantity}</Badge>
+                )}
               </div>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <CardTitle className="font-headline text-xl text-primary">{p.name}</CardTitle>
                   <span className="text-xl font-bold text-secondary">${p.price.toFixed(2)}</span>
                 </div>
-                <p className="text-xs font-mono text-muted-foreground bg-primary/5 inline-block px-2 py-1 rounded">{p.sku}</p>
+                <div className="flex justify-between items-center mt-1">
+                  <p className="text-xs font-mono text-muted-foreground bg-primary/5 inline-block px-2 py-1 rounded">{p.sku}</p>
+                  <Badge variant="outline" className="flex gap-1 items-center font-normal">
+                    <Package size={12} /> {p.quantity} units
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex flex-wrap gap-2 pt-2">

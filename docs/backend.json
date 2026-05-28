@@ -12,11 +12,12 @@
         "spec": { "type": "string" },
         "color": { "type": "string" },
         "price": { "type": "number" },
+        "quantity": { "type": "number", "description": "Current stock level" },
         "description": { "type": "string" },
         "imageUrl": { "type": "string" },
         "isDeleted": { "type": "boolean" }
       },
-      "required": ["sku", "name", "price"]
+      "required": ["sku", "name", "price", "quantity"]
     },
     "Sale": {
       "title": "Sale",
