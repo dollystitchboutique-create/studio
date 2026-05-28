@@ -31,7 +31,7 @@ const prompt = ai.definePrompt({
   
   Review the following recent sales data:
   {{#each salesData}}
-  - Sale: ${{total}}, Items: {{#each items}}{{quantity}}x {{name}}; {{/each}}
+  - Sale: $ {{total}}, Items: {{#each items}}{{quantity}}x {{name}}; {{/each}}
   {{/each}}
   
   Provide a professional summary of current performance, identify the top performer, and give one creative recommendation to increase sales next month (e.g., a specific promotion or focus area).`,
