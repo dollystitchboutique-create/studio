@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   BarChart3, 
   ShoppingBag, 
@@ -13,12 +13,29 @@ import {
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { useAuth, useUser } from '@/firebase';
+import { signOut } from 'firebase/auth';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const auth = useAuth();
+  const { user, loading } = useUser();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [user, loading, router]);
+
+  const handleLogout = async () => {
+    if (!auth) return;
+    await signOut(auth);
+    router.push('/');
+  };
 
   const navItems = [
     { name: 'Insights', href: '/dashboard', icon: BarChart3 },
@@ -26,6 +43,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Catalogue', href: '/dashboard/products', icon: Tag },
     { name: 'Sales Log', href: '/dashboard/history', icon: History },
   ];
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center bg-background">Loading...</div>;
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background font-body flex flex-col md:flex-row">
@@ -70,13 +95,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="p-4 border-t border-primary/10">
-          <Link 
-            href="/"
-            className="flex items-center gap-3 px-4 py-3 text-destructive hover:bg-destructive/5 rounded-xl transition-all"
+          <Button 
+            variant="ghost"
+            onClick={handleLogout}
+            className="w-full flex justify-start items-center gap-3 px-4 py-3 text-destructive hover:bg-destructive/5 rounded-xl transition-all"
           >
             <LogOut size={20} />
             <span className="font-medium">Logout</span>
-          </Link>
+          </Button>
         </div>
       </aside>
 
