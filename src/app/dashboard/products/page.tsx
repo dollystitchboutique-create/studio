@@ -36,6 +36,16 @@ import { generateJewelryDescription } from '@/ai/flows/generate-description-flow
 import { generateInspiration } from '@/ai/flows/generate-inspiration-flow';
 import { useToast } from '@/hooks/use-toast';
 
+const CATEGORIES = [
+  'arm cuff',
+  'ear cuff',
+  'custom',
+  'keychain',
+  'phone chain',
+  'hair clip',
+  'bracelet'
+];
+
 export default function ProductCatalogue() {
   const db = useFirestore();
   const { toast } = useToast();
@@ -55,7 +65,7 @@ export default function ProductCatalogue() {
 
   const [newProd, setNewProd] = useState({
     name: '',
-    category: 'Necklace',
+    category: CATEGORIES[0],
     spec: '',
     color: '',
     price: '',
@@ -136,7 +146,7 @@ export default function ProductCatalogue() {
       });
 
     setIsAdding(false);
-    setNewProd({ name: '', category: 'Necklace', spec: '', color: '', price: '', description: '', sku: '' });
+    setNewProd({ name: '', category: CATEGORIES[0], spec: '', color: '', price: '', description: '', sku: '' });
   };
 
   const softDelete = (id: string) => {
@@ -177,7 +187,7 @@ export default function ProductCatalogue() {
                 <div className="space-y-2">
                   <Label>Describe a new jewelry concept</Label>
                   <Input 
-                    placeholder="e.g. A celestial necklace with moonstone and silver stars"
+                    placeholder="e.g. A celestial arm cuff with moonstone and silver stars"
                     value={inspirationPrompt}
                     onChange={e => setInspirationPrompt(e.target.value)}
                   />
@@ -207,7 +217,7 @@ export default function ProductCatalogue() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl bg-white">
               <DialogHeader>
-                <DialogTitle className="font-headline text-2xl text-primary">Add New Jewelry Piece</DialogTitle>
+                <DialogTitle className="font-headline text-2xl text-primary">Add New Item</DialogTitle>
               </DialogHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
                 <div className="space-y-2">
@@ -217,14 +227,13 @@ export default function ProductCatalogue() {
                 <div className="space-y-2">
                   <Label>Category</Label>
                   <select 
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     value={newProd.category} 
                     onChange={e => setNewProd({...newProd, category: e.target.value})}
                   >
-                    <option>Necklace</option>
-                    <option>Earrings</option>
-                    <option>Bracelet</option>
-                    <option>Ring</option>
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -296,7 +305,7 @@ export default function ProductCatalogue() {
                   alt={p.name} 
                   className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
                 />
-                <Badge className="absolute top-3 right-3 bg-white/90 text-primary hover:bg-white">{p.category}</Badge>
+                <Badge className="absolute top-3 right-3 bg-white/90 text-primary hover:bg-white capitalize">{p.category}</Badge>
               </div>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">

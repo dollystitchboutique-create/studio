@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI flow to generate luxurious product descriptions for artisanal jewelry.
@@ -8,7 +9,7 @@ import { z } from 'genkit';
 
 const DescriptionInputSchema = z.object({
   name: z.string().describe('The name of the jewelry piece.'),
-  category: z.string().describe('The category (e.g., Necklace, Ring).'),
+  category: z.string().describe('The category (e.g., Arm cuff, Ear cuff, Keychain).'),
   color: z.string().describe('Material or color description.'),
   spec: z.string().describe('Technical specifications (e.g., 18k gold).'),
 });
