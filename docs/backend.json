@@ -1,9 +1,8 @@
-
 {
   "entities": {
     "Product": {
       "title": "Product",
-      "description": "Artisanal jewelry product",
+      "description": "Artisanal jewelry product with stock tracking",
       "type": "object",
       "properties": {
         "sku": { "type": "string" },
@@ -15,18 +14,20 @@
         "quantity": { "type": "number", "description": "Current stock level" },
         "description": { "type": "string" },
         "imageUrl": { "type": "string" },
-        "isDeleted": { "type": "boolean" }
+        "isDeleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["sku", "name", "price", "quantity"]
     },
     "Sale": {
       "title": "Sale",
-      "description": "Transaction record",
+      "description": "Transaction record with discount tracking",
       "type": "object",
       "properties": {
         "customerName": { "type": "string" },
         "paymentMethod": { "type": "string", "enum": ["Cash", "Paylah", "PayNow"] },
         "discount": { "type": "number" },
+        "discountType": { "type": "string", "enum": ["amount", "percent"] },
         "total": { "type": "number" },
         "timestamp": { "type": "string", "format": "date-time" },
         "isDeleted": { "type": "boolean" },
@@ -38,7 +39,9 @@
               "sku": { "type": "string" },
               "name": { "type": "string" },
               "price": { "type": "number" },
-              "quantity": { "type": "number" }
+              "quantity": { "type": "number" },
+              "discount": { "type": "number" },
+              "discountType": { "type": "string" }
             }
           }
         }
@@ -51,11 +54,11 @@
   "firestore": {
     "/products/{productId}": {
       "schema": "Product",
-      "description": "Product catalogue"
+      "description": "Product catalogue for Dollystitch Hub"
     },
     "/sales/{saleId}": {
       "schema": "Sale",
-      "description": "Sales records"
+      "description": "Sales records for Dollystitch Hub"
     }
   }
 }
