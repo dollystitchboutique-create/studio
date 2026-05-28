@@ -1,3 +1,4 @@
+
 export const firebaseConfig = {
   apiKey: "AIzaSyB-REAL-API-KEY-FOR-DOLLYSTITCH",
   authDomain: "dollystitch-app.firebaseapp.com",

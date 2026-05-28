@@ -39,21 +39,22 @@ export default function LoginPage() {
         await createUserWithEmailAndPassword(auth, email, password);
         toast({
           title: "Account created",
-          description: "Welcome to Dollystitch Hub!",
+          description: "Welcome to Dollystitch Hub! You can now log in.",
         });
+        setIsRegistering(false); // Switch to login after successful registration
       } else {
         await signInWithEmailAndPassword(auth, email, password);
         toast({
           title: "Logged in",
           description: "Successfully authenticated.",
         });
+        router.push('/dashboard');
       }
-      router.push('/dashboard');
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Authentication Error",
-        description: error.message || "Something went wrong. Please try again.",
+        description: error.message || "Something went wrong. Please check your credentials.",
       });
     } finally {
       setLoading(false);
@@ -77,7 +78,7 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-4xl font-headline text-primary">Dollystitch Hub</CardTitle>
           <CardDescription className="text-muted-foreground font-body">
-            {isRegistering ? "Create your administrator account" : "Admin Business Management Tool"}
+            {isRegistering ? "Register your administrator account" : "Admin Business Management Tool"}
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleAuth}>
