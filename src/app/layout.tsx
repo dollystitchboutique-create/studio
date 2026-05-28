@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
@@ -7,6 +7,12 @@ import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 export const metadata: Metadata = {
   title: 'Dollystitch Hub | Artisanal Jewelry Management',
   description: 'Business management tools for Dollystitch Hub jewelry.',
+};
+
+export const viewport: Viewport = {
+  themeColor: '#FC809F',
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
