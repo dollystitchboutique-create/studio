@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +15,9 @@ import {
   Info,
   Sparkles,
   Loader2,
-  Wand2
+  Wand2,
+  Upload,
+  Camera
 } from 'lucide-react';
 import {
   Dialog,
@@ -27,12 +28,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { generateJewelryDescription } from '@/ai/flows/generate-description-flow';
 import { generateInspiration } from '@/ai/flows/generate-inspiration-flow';
 import { useToast } from '@/hooks/use-toast';
 
@@ -51,10 +50,10 @@ export default function ProductCatalogue() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isInspiring, setIsInspiring] = useState(false);
   const [inspirationPrompt, setInspirationPrompt] = useState('');
   const [generatedInspiration, setGeneratedInspiration] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const productsRef = useMemoFirebase(() => {
     if (!db) return null;
@@ -69,8 +68,8 @@ export default function ProductCatalogue() {
     spec: '',
     color: '',
     price: '',
-    description: '',
     sku: '',
+    imageUrl: '',
   });
 
   const filteredProducts = products.filter(p => 
@@ -86,24 +85,14 @@ export default function ProductCatalogue() {
     setNewProd({ ...newProd, sku });
   };
 
-  const handleAiDescription = async () => {
-    if (!newProd.name || !newProd.color) {
-      toast({ variant: 'destructive', title: 'Missing Info', description: 'Please enter a name and material first.' });
-      return;
-    }
-    setIsGenerating(true);
-    try {
-      const result = await generateJewelryDescription({
-        name: newProd.name,
-        category: newProd.category,
-        color: newProd.color,
-        spec: newProd.spec
-      });
-      setNewProd({ ...newProd, description: result.description });
-    } catch (error) {
-      toast({ variant: 'destructive', title: 'AI Error', description: 'Could not generate description.' });
-    } finally {
-      setIsGenerating(false);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewProd({ ...newProd, imageUrl: reader.result as string });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -122,6 +111,10 @@ export default function ProductCatalogue() {
 
   const handleAddProduct = () => {
     if (!db) return;
+    if (!newProd.sku || !newProd.name || !newProd.price) {
+      toast({ variant: 'destructive', title: 'Error', description: 'SKU, Name, and Price are required.' });
+      return;
+    }
     
     const payload = {
       sku: newProd.sku,
@@ -130,13 +123,18 @@ export default function ProductCatalogue() {
       spec: newProd.spec,
       color: newProd.color,
       price: parseFloat(newProd.price) || 0,
-      description: newProd.description,
-      imageUrl: `https://picsum.photos/seed/${Date.now()}/600/400`,
+      description: '', // Removed description as per user request
+      imageUrl: newProd.imageUrl || `https://picsum.photos/seed/${Date.now()}/600/400`,
       isDeleted: false,
       createdAt: serverTimestamp(),
     };
 
     addDoc(collection(db, 'products'), payload)
+      .then(() => {
+        toast({ title: 'Success', description: 'Product added to catalogue.' });
+        setIsAdding(false);
+        setNewProd({ name: '', category: CATEGORIES[0], spec: '', color: '', price: '', sku: '', imageUrl: '' });
+      })
       .catch(async (err) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: 'products',
@@ -144,9 +142,6 @@ export default function ProductCatalogue() {
           requestResourceData: payload
         }));
       });
-
-    setIsAdding(false);
-    setNewProd({ name: '', category: CATEGORIES[0], spec: '', color: '', price: '', description: '', sku: '' });
   };
 
   const softDelete = (id: string) => {
@@ -220,6 +215,30 @@ export default function ProductCatalogue() {
                 <DialogTitle className="font-headline text-2xl text-primary">Add New Item</DialogTitle>
               </DialogHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                <div className="col-span-full">
+                  <Label>Product Picture</Label>
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mt-2 border-2 border-dashed border-primary/20 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all overflow-hidden relative"
+                  >
+                    {newProd.imageUrl ? (
+                      <img src={newProd.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <>
+                        <Upload className="h-10 w-10 text-primary/40 mb-2" />
+                        <p className="text-sm text-muted-foreground">Click to upload or take a photo</p>
+                      </>
+                    )}
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={handleImageUpload}
+                      capture="environment"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label>Product Name</Label>
                   <Input value={newProd.name} onChange={e => setNewProd({...newProd, name: e.target.value})} placeholder="e.g. Sapphire Dream" />
@@ -254,22 +273,6 @@ export default function ProductCatalogue() {
                     <Input value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
                     <Button variant="outline" size="sm" onClick={generateSku}>Generate</Button>
                   </div>
-                </div>
-                <div className="col-span-full space-y-2">
-                  <div className="flex justify-between items-center">
-                    <Label>Description</Label>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={handleAiDescription} 
-                      disabled={isGenerating}
-                      className="text-primary hover:text-secondary h-8 gap-1"
-                    >
-                      {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                      Generate with AI
-                    </Button>
-                  </div>
-                  <Textarea value={newProd.description} onChange={e => setNewProd({...newProd, description: e.target.value})} placeholder="Describe this masterpiece..." className="min-h-[100px]" />
                 </div>
               </div>
               <DialogFooter>
@@ -315,7 +318,6 @@ export default function ProductCatalogue() {
                 <p className="text-xs font-mono text-muted-foreground bg-primary/5 inline-block px-2 py-1 rounded">{p.sku}</p>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground line-clamp-2">{p.description}</p>
                 <div className="flex flex-wrap gap-2 pt-2">
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Palette size={12} /> {p.color}

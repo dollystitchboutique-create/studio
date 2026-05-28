@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Product, Sale, SaleItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,10 @@ import {
   CreditCard,
   User,
   Ticket,
-  Tag as TagIcon
+  Tag as TagIcon,
+  Camera,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -23,6 +26,15 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from '@/hooks/use-toast';
+import { identifyProduct } from '@/ai/flows/identify-product-flow';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function POSCheckout() {
   const db = useFirestore();
@@ -32,6 +44,9 @@ export default function POSCheckout() {
   const [customer, setCustomer] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Paylah' | 'PayNow'>('PayNow');
   const [discount, setDiscount] = useState(0);
+  const [isIdentifying, setIsIdentifying] = useState(false);
+  const [matchedProduct, setMatchedProduct] = useState<Product | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const productsRef = useMemoFirebase(() => {
     if (!db) return null;
@@ -58,6 +73,46 @@ export default function POSCheckout() {
       addToCart(product);
     } else {
       toast({ variant: 'destructive', title: 'Error', description: 'Product not found.' });
+    }
+  };
+
+  const handleCameraScan = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && products.length > 0) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        setIsIdentifying(true);
+        try {
+          const result = await identifyProduct({
+            photoDataUri: reader.result as string,
+            catalog: products.map(p => ({ sku: p.sku, name: p.name, category: p.category, color: p.color }))
+          });
+          
+          if (result.matchFound && result.sku) {
+            const product = products.find(p => p.sku === result.sku);
+            if (product) {
+              setMatchedProduct(product);
+            } else {
+              toast({ variant: 'destructive', title: 'AI Identification', description: 'Matched product no longer in catalogue.' });
+            }
+          } else {
+            toast({ variant: 'destructive', title: 'AI Identification', description: 'Could not identify product. Try manual search.' });
+          }
+        } catch (error) {
+          toast({ variant: 'destructive', title: 'AI Error', description: 'Failed to analyze photo.' });
+        } finally {
+          setIsIdentifying(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const confirmMatchedProduct = () => {
+    if (matchedProduct) {
+      addToCart(matchedProduct);
+      setMatchedProduct(null);
+      toast({ title: 'Success', description: `${matchedProduct.name} added to cart.` });
     }
   };
 
@@ -110,9 +165,27 @@ export default function POSCheckout() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
       <div className="lg:col-span-2 space-y-6">
-        <div>
-          <h2 className="text-4xl font-headline text-primary">POS Checkout</h2>
-          <p className="text-muted-foreground mt-1">Start a new transaction.</p>
+        <div className="flex justify-between items-end">
+          <div>
+            <h2 className="text-4xl font-headline text-primary">POS Checkout</h2>
+            <p className="text-muted-foreground mt-1">Start a new transaction.</p>
+          </div>
+          <Button 
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={isIdentifying}
+            className="bg-secondary hover:bg-primary shadow-lg gap-2 h-12 rounded-xl px-6"
+          >
+            {isIdentifying ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+            Scan Product
+          </Button>
+          <input 
+            type="file" 
+            ref={cameraInputRef} 
+            className="hidden" 
+            accept="image/*" 
+            capture="environment"
+            onChange={handleCameraScan}
+          />
         </div>
 
         <Card className="border-primary/20 bg-white overflow-hidden">
@@ -179,6 +252,33 @@ export default function POSCheckout() {
           </CardContent>
         </Card>
 
+        <Dialog open={!!matchedProduct} onOpenChange={() => setMatchedProduct(null)}>
+          <DialogContent className="bg-white max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="font-headline text-2xl text-primary flex items-center gap-2">
+                <CheckCircle2 className="text-emerald-500" /> Confirm Product
+              </DialogTitle>
+              <DialogDescription>AI identified the following product:</DialogDescription>
+            </DialogHeader>
+            {matchedProduct && (
+              <div className="space-y-4 py-2">
+                <div className="aspect-square rounded-2xl overflow-hidden border border-primary/10">
+                  <img src={matchedProduct.imageUrl} alt={matchedProduct.name} className="w-full h-full object-cover" />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-bold text-xl">{matchedProduct.name}</h3>
+                  <p className="text-muted-foreground font-mono">{matchedProduct.sku}</p>
+                  <p className="text-2xl font-bold text-secondary mt-2">${matchedProduct.price.toFixed(2)}</p>
+                </div>
+              </div>
+            )}
+            <DialogFooter className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setMatchedProduct(null)}>Cancel</Button>
+              <Button className="flex-1 bg-primary" onClick={confirmMatchedProduct}>Add to Cart</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div>
           <h3 className="font-headline text-xl text-primary mb-4 flex items-center gap-2">
             <TagIcon size={18} /> Popular Items
@@ -188,10 +288,10 @@ export default function POSCheckout() {
               <button 
                 key={p.id}
                 onClick={() => addToCart(p)}
-                className="p-4 bg-white border border-primary/10 rounded-2xl text-center hover:border-primary hover:shadow-lg transition-all"
+                className="p-4 bg-white border border-primary/10 rounded-2xl text-center hover:border-primary hover:shadow-lg transition-all overflow-hidden"
               >
-                <div className="w-12 h-12 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <TagIcon size={20} className="text-primary" />
+                <div className="w-full aspect-square bg-primary/5 rounded-xl mb-2 overflow-hidden">
+                  <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
                 </div>
                 <p className="text-xs font-bold truncate">{p.name}</p>
                 <p className="text-xs text-primary">${p.price}</p>
