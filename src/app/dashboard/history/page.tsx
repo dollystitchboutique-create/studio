@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -202,41 +201,45 @@ export default function SalesHistory() {
       </Card>
 
       <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
-        <DialogContent className="bg-white max-w-lg">
+        <DialogContent className="bg-white max-w-lg flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="font-headline text-2xl text-primary">Transaction Receipt</DialogTitle>
             <DialogDescription>Details for Sale {selectedSale?.id}</DialogDescription>
           </DialogHeader>
-          {selectedSale && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 text-sm py-4 border-y border-dashed border-primary/20">
-                <div>
-                  <p className="text-muted-foreground font-bold uppercase text-[10px]">Customer</p>
-                  <p className="font-bold">{selectedSale.customerName}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-muted-foreground font-bold uppercase text-[10px]">Payment</p>
-                  <p className="font-bold">{selectedSale.paymentMethod}</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <p className="text-xs font-bold uppercase text-muted-foreground">Items Ordered</p>
-                {selectedSale.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-sm">
-                    <span>{item.quantity}x {item.name}</span>
-                    <span className="font-bold">${(item.price * item.quantity).toFixed(2)}</span>
+          <div className="flex-1 overflow-y-auto px-1 py-4">
+            {selectedSale && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4 text-sm py-4 border-y border-dashed border-primary/20">
+                  <div>
+                    <p className="text-muted-foreground font-bold uppercase text-[10px]">Customer</p>
+                    <p className="font-bold">{selectedSale.customerName}</p>
                   </div>
-                ))}
+                  <div className="text-right">
+                    <p className="text-muted-foreground font-bold uppercase text-[10px]">Payment</p>
+                    <p className="font-bold">{selectedSale.paymentMethod}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xs font-bold uppercase text-muted-foreground">Items Ordered</p>
+                  {selectedSale.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-sm">
+                      <span>{item.quantity}x {item.name}</span>
+                      <span className="font-bold">${(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-4 border-t border-primary/10 flex justify-between items-center">
+                  <span className="text-lg font-headline text-primary">Total Amount</span>
+                  <span className="text-2xl font-bold text-secondary">${selectedSale.total.toFixed(2)}</span>
+                </div>
               </div>
-              <div className="pt-4 border-t border-primary/10 flex justify-between items-center">
-                <span className="text-lg font-headline text-primary">Total Amount</span>
-                <span className="text-2xl font-bold text-secondary">${selectedSale.total.toFixed(2)}</span>
-              </div>
-              <Button className="w-full bg-primary" onClick={() => window.print()}>
-                Print Receipt
-              </Button>
-            </div>
-          )}
+            )}
+          </div>
+          <div className="pt-4 border-t mt-4">
+            <Button className="w-full bg-primary" onClick={() => window.print()}>
+              Print Receipt
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
