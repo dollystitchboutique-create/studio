@@ -1,9 +1,9 @@
 
 export const firebaseConfig = {
-  apiKey: "API_KEY",
-  authDomain: "PROJECT_ID.firebaseapp.com",
-  projectId: "PROJECT_ID",
-  storageBucket: "PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+  apiKey: "AIzaSyB-EXAMPLE-KEY-12345",
+  authDomain: "dollystitch-hub.firebaseapp.com",
+  projectId: "dollystitch-hub",
+  storageBucket: "dollystitch-hub.firebasestorage.app",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:abcdef123456"
 };
