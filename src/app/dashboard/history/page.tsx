@@ -27,6 +27,7 @@ import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,7 @@ import {
 
 export default function SalesHistory() {
   const db = useFirestore();
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
@@ -82,6 +84,9 @@ export default function SalesHistory() {
     if(confirm('Are you sure you want to delete this sale record?')) {
       const docRef = doc(db, 'sales', id);
       updateDoc(docRef, { isDeleted: true })
+        .then(() => {
+          toast({ title: "Removed", description: "Sale record has been hidden." });
+        })
         .catch(async (err) => {
           errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: `sales/${id}`,
@@ -153,7 +158,7 @@ export default function SalesHistory() {
             <TableBody>
               {filteredSales.map((sale) => (
                 <TableRow key={sale.id} className="hover:bg-primary/[0.02]">
-                  <TableCell className="font-mono text-[9px] text-muted-foreground truncate max-w-[80px]">
+                  <TableCell className="font-mono text-[8px] text-muted-foreground truncate max-w-[70px]">
                     {sale.id}
                   </TableCell>
                   <TableCell className="font-bold text-sm">{sale.customerName}</TableCell>

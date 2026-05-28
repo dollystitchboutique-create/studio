@@ -28,7 +28,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Label } from '@/components/ui/label';
+import { Label } from '@/label';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -77,7 +77,6 @@ export default function ProductCatalogue() {
     imageUrl: '',
   });
 
-  // Sort products so that out-of-stock items (quantity <= 0) are at the bottom
   const filteredProducts = products
     .filter(p => !p.isDeleted && (p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase())))
     .sort((a, b) => {
@@ -200,6 +199,9 @@ export default function ProductCatalogue() {
     if (confirm('Are you sure you want to remove this product?')) {
       const docRef = doc(db, 'products', id);
       updateDoc(docRef, { isDeleted: true })
+        .then(() => {
+          toast({ title: "Removed", description: "Product removed from catalogue." });
+        })
         .catch(async (err) => {
           errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: `products/${id}`,
