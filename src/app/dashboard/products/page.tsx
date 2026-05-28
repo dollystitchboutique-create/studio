@@ -12,7 +12,9 @@ import {
   Trash2, 
   Image as ImageIcon,
   Palette,
-  Info
+  Info,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import {
   Dialog,
@@ -28,11 +30,15 @@ import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { generateJewelryDescription } from '@/ai/flows/generate-description-flow';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ProductCatalogue() {
   const db = useFirestore();
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const productsRef = useMemoFirebase(() => {
     if (!db) return null;
@@ -62,6 +68,27 @@ export default function ProductCatalogue() {
     const rand = Math.floor(100 + Math.random() * 900);
     const sku = `${prefix}-${colorCode}-${rand}`;
     setNewProd({ ...newProd, sku });
+  };
+
+  const handleAiDescription = async () => {
+    if (!newProd.name || !newProd.color) {
+      toast({ variant: 'destructive', title: 'Missing Info', description: 'Please enter a name and material first.' });
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const result = await generateJewelryDescription({
+        name: newProd.name,
+        category: newProd.category,
+        color: newProd.color,
+        spec: newProd.spec
+      });
+      setNewProd({ ...newProd, description: result.description });
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'AI Error', description: 'Could not generate description.' });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleAddProduct = () => {
@@ -162,8 +189,20 @@ export default function ProductCatalogue() {
                 </div>
               </div>
               <div className="col-span-full space-y-2">
-                <Label>Description</Label>
-                <Textarea value={newProd.description} onChange={e => setNewProd({...newProd, description: e.target.value})} placeholder="Describe this masterpiece..." />
+                <div className="flex justify-between items-center">
+                  <Label>Description</Label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleAiDescription} 
+                    disabled={isGenerating}
+                    className="text-primary hover:text-secondary h-8 gap-1"
+                  >
+                    {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    Generate with AI
+                  </Button>
+                </div>
+                <Textarea value={newProd.description} onChange={e => setNewProd({...newProd, description: e.target.value})} placeholder="Describe this masterpiece..." className="min-h-[100px]" />
               </div>
             </div>
             <DialogFooter>

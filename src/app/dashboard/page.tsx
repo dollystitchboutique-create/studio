@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { 
   BarChart, 
   Bar, 
@@ -11,13 +13,16 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
-import { TrendingUp, ShoppingBag, DollarSign, Package } from 'lucide-react';
+import { TrendingUp, ShoppingBag, DollarSign, Package, Sparkles, Loader2, BrainCircuit } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import { Sale, Product } from '@/lib/types';
+import { analyzeSales } from '@/ai/flows/analyze-sales-flow';
 
 export default function InsightsDashboard() {
   const db = useFirestore();
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiInsight, setAiInsight] = useState<{ summary: string, recommendation: string, topPerformer: string } | null>(null);
 
   const salesRef = useMemoFirebase(() => {
     if (!db) return null;
@@ -31,6 +36,24 @@ export default function InsightsDashboard() {
 
   const { data: sales, loading: salesLoading } = useCollection<Sale>(salesRef);
   const { data: products, loading: productsLoading } = useCollection<Product>(productsRef);
+
+  const handleGetAiInsights = async () => {
+    if (sales.length === 0) return;
+    setIsAnalyzing(true);
+    try {
+      const data = sales.map(s => ({
+        total: s.total,
+        items: s.items.map(i => ({ name: i.name, quantity: i.quantity })),
+        timestamp: s.timestamp
+      }));
+      const result = await analyzeSales({ salesData: data });
+      setAiInsight(result);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   // Aggregate sales by category
   const categoryData = sales.reduce((acc: any[], sale) => {
@@ -67,6 +90,14 @@ export default function InsightsDashboard() {
           <h2 className="text-4xl font-headline text-primary">Insights Dashboard</h2>
           <p className="text-muted-foreground mt-1">Real-time performance of Dollystitch Hub.</p>
         </div>
+        <Button 
+          onClick={handleGetAiInsights} 
+          disabled={isAnalyzing || sales.length === 0}
+          className="bg-primary hover:bg-secondary shadow-lg gap-2"
+        >
+          {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
+          Get AI Sales Insights
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -91,6 +122,32 @@ export default function InsightsDashboard() {
           );
         })}
       </div>
+
+      {aiInsight && (
+        <Card className="border-primary/20 bg-primary/5 animate-in zoom-in duration-300">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-primary font-headline">
+              <Sparkles className="h-5 w-5" /> AI Business Analysis
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-1">
+              <p className="text-xs font-bold uppercase opacity-60">Performance Summary</p>
+              <p className="text-sm leading-relaxed">{aiInsight.summary}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-bold uppercase opacity-60">Top Performer</p>
+              <p className="text-sm font-bold text-secondary">{aiInsight.topPerformer}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-bold uppercase opacity-60">Strategic Tip</p>
+              <p className="text-sm bg-white/50 p-3 rounded-lg border border-primary/10 italic">
+                "{aiInsight.recommendation}"
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-6">
         <Card className="border-primary/10">
