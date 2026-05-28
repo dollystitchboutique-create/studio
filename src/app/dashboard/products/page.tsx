@@ -17,7 +17,7 @@ import {
   Loader2,
   Wand2,
   Upload,
-  Camera
+  Edit
 } from 'lucide-react';
 import {
   Dialog,
@@ -50,10 +50,12 @@ export default function ProductCatalogue() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isInspiring, setIsInspiring] = useState(false);
   const [inspirationPrompt, setInspirationPrompt] = useState('');
   const [generatedInspiration, setGeneratedInspiration] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   const productsRef = useMemoFirebase(() => {
     if (!db) return null;
@@ -77,20 +79,32 @@ export default function ProductCatalogue() {
     (p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const generateSku = () => {
-    const prefix = newProd.category.substring(0, 2).toUpperCase();
-    const colorCode = newProd.color.substring(0, 3).toUpperCase() || 'GEN';
+  const generateSku = (target: 'new' | 'edit') => {
+    const context = target === 'new' ? newProd : editingProduct;
+    if (!context) return;
+    
+    const prefix = context.category.substring(0, 2).toUpperCase();
+    const colorCode = context.color.substring(0, 3).toUpperCase() || 'GEN';
     const rand = Math.floor(100 + Math.random() * 900);
     const sku = `${prefix}-${colorCode}-${rand}`;
-    setNewProd({ ...newProd, sku });
+    
+    if (target === 'new') {
+      setNewProd({ ...newProd, sku });
+    } else if (editingProduct) {
+      setEditingProduct({ ...editingProduct, sku });
+    }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'new' | 'edit') => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setNewProd({ ...newProd, imageUrl: reader.result as string });
+        if (target === 'new') {
+          setNewProd({ ...newProd, imageUrl: reader.result as string });
+        } else if (editingProduct) {
+          setEditingProduct({ ...editingProduct, imageUrl: reader.result as string });
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -123,7 +137,7 @@ export default function ProductCatalogue() {
       spec: newProd.spec,
       color: newProd.color,
       price: parseFloat(newProd.price) || 0,
-      description: '', // Removed description as per user request
+      description: '',
       imageUrl: newProd.imageUrl || `https://picsum.photos/seed/${Date.now()}/600/400`,
       isDeleted: false,
       createdAt: serverTimestamp(),
@@ -144,17 +158,47 @@ export default function ProductCatalogue() {
       });
   };
 
-  const softDelete = (id: string) => {
-    if (!db) return;
-    const docRef = doc(db, 'products', id);
-    updateDoc(docRef, { isDeleted: true })
+  const handleUpdateProduct = () => {
+    if (!db || !editingProduct || !editingProduct.id) return;
+    
+    const docRef = doc(db, 'products', editingProduct.id);
+    const updateData = {
+      sku: editingProduct.sku,
+      name: editingProduct.name,
+      category: editingProduct.category,
+      spec: editingProduct.spec,
+      color: editingProduct.color,
+      price: typeof editingProduct.price === 'string' ? parseFloat(editingProduct.price) : editingProduct.price,
+      imageUrl: editingProduct.imageUrl,
+    };
+
+    updateDoc(docRef, updateData)
+      .then(() => {
+        toast({ title: 'Success', description: 'Product updated.' });
+        setEditingProduct(null);
+      })
       .catch(async (err) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `products/${id}`,
+          path: `products/${editingProduct.id}`,
           operation: 'update',
-          requestResourceData: { isDeleted: true }
+          requestResourceData: updateData
         }));
       });
+  };
+
+  const softDelete = (id: string) => {
+    if (!db) return;
+    if (confirm('Are you sure you want to remove this product?')) {
+      const docRef = doc(db, 'products', id);
+      updateDoc(docRef, { isDeleted: true })
+        .catch(async (err) => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: `products/${id}`,
+            operation: 'update',
+            requestResourceData: { isDeleted: true }
+          }));
+        });
+    }
   };
 
   return (
@@ -235,8 +279,7 @@ export default function ProductCatalogue() {
                         ref={fileInputRef} 
                         className="hidden" 
                         accept="image/*" 
-                        onChange={handleImageUpload}
-                        capture="environment"
+                        onChange={(e) => handleImageUpload(e, 'new')}
                       />
                     </div>
                   </div>
@@ -272,7 +315,7 @@ export default function ProductCatalogue() {
                     <Label>SKU (Auto-suggested)</Label>
                     <div className="flex gap-2">
                       <Input value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
-                      <Button variant="outline" size="sm" onClick={generateSku}>Generate</Button>
+                      <Button variant="outline" size="sm" onClick={() => generateSku('new')}>Generate</Button>
                     </div>
                   </div>
                 </div>
@@ -285,6 +328,83 @@ export default function ProductCatalogue() {
           </Dialog>
         </div>
       </div>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
+        <DialogContent className="max-w-2xl bg-white flex flex-col max-h-[95vh]">
+          <DialogHeader>
+            <DialogTitle className="font-headline text-2xl text-primary">Edit Item</DialogTitle>
+          </DialogHeader>
+          {editingProduct && (
+            <div className="flex-1 overflow-y-auto px-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                <div className="col-span-full">
+                  <Label>Product Picture</Label>
+                  <div 
+                    onClick={() => editFileInputRef.current?.click()}
+                    className="mt-2 border-2 border-dashed border-primary/20 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all overflow-hidden relative"
+                  >
+                    {editingProduct.imageUrl ? (
+                      <img src={editingProduct.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <>
+                        <Upload className="h-10 w-10 text-primary/40 mb-2" />
+                        <p className="text-sm text-muted-foreground">Click to change photo</p>
+                      </>
+                    )}
+                    <input 
+                      type="file" 
+                      ref={editFileInputRef} 
+                      className="hidden" 
+                      accept="image/*" 
+                      onChange={(e) => handleImageUpload(e, 'edit')}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Product Name</Label>
+                  <Input value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <select 
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    value={editingProduct.category} 
+                    onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}
+                  >
+                    {CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Color / Material</Label>
+                  <Input value={editingProduct.color} onChange={e => setEditingProduct({...editingProduct, color: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Specification</Label>
+                  <Input value={editingProduct.spec} onChange={e => setEditingProduct({...editingProduct, spec: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Price ($)</Label>
+                  <Input type="number" value={editingProduct.price} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value) || 0})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>SKU</Label>
+                  <div className="flex gap-2">
+                    <Input value={editingProduct.sku} onChange={e => setEditingProduct({...editingProduct, sku: e.target.value})} />
+                    <Button variant="outline" size="sm" onClick={() => generateSku('edit')}>Generate</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="pt-4 border-t mt-4">
+            <Button variant="outline" onClick={() => setEditingProduct(null)}>Cancel</Button>
+            <Button className="bg-primary" onClick={handleUpdateProduct}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
@@ -330,8 +450,13 @@ export default function ProductCatalogue() {
                 </div>
               </CardContent>
               <CardFooter className="pt-0 flex justify-between">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
-                  Edit
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-muted-foreground hover:text-primary"
+                  onClick={() => setEditingProduct(p)}
+                >
+                  <Edit size={16} className="mr-1" /> Edit
                 </Button>
                 <Button 
                   variant="ghost" 

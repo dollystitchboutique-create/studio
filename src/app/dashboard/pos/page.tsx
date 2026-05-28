@@ -142,7 +142,7 @@ export default function POSCheckout() {
       discount,
       total,
       items: cart,
-      timestamp: serverTimestamp(),
+      timestamp: new Date().toISOString(),
       isDeleted: false,
     };
 
@@ -183,7 +183,6 @@ export default function POSCheckout() {
             ref={cameraInputRef} 
             className="hidden" 
             accept="image/*" 
-            capture="environment"
             onChange={handleCameraScan}
           />
         </div>
