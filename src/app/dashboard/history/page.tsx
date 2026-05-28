@@ -1,8 +1,6 @@
-
 "use client";
 
 import { useState } from 'react';
-import { INITIAL_SALES } from '@/lib/mock-data';
 import { Sale } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,14 +22,25 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function SalesHistory() {
-  const [sales, setSales] = useState<Sale[]>(INITIAL_SALES);
+  const db = useFirestore();
   const [search, setSearch] = useState('');
+
+  const salesQuery = useMemoFirebase(() => {
+    if (!db) return null;
+    return query(collection(db, 'sales'), orderBy('timestamp', 'desc'));
+  }, [db]);
+
+  const { data: sales, loading } = useCollection<Sale>(salesQuery);
 
   const filteredSales = sales.filter(s => 
     !s.isDeleted && 
-    (s.customerName.toLowerCase().includes(search.toLowerCase()) || s.id.toLowerCase().includes(search.toLowerCase()))
+    (s.customerName.toLowerCase().includes(search.toLowerCase()) || (s.id && s.id.toLowerCase().includes(search.toLowerCase())))
   );
 
   const totalRevenue = filteredSales.reduce((acc, s) => acc + s.total, 0);
@@ -41,7 +50,7 @@ export default function SalesHistory() {
     const rows = filteredSales.map(s => [
       s.id,
       s.customerName,
-      new Date(s.timestamp).toLocaleDateString(),
+      s.timestamp ? new Date(s.timestamp).toLocaleDateString() : 'N/A',
       s.items.map(i => `${i.name} (x${i.quantity})`).join('; '),
       s.total.toFixed(2),
       s.paymentMethod
@@ -60,8 +69,17 @@ export default function SalesHistory() {
   };
 
   const softDelete = (id: string) => {
+    if (!db) return;
     if(confirm('Are you sure you want to delete this sale record?')) {
-      setSales(sales.map(s => s.id === id ? { ...s, isDeleted: true } : s));
+      const docRef = doc(db, 'sales', id);
+      updateDoc(docRef, { isDeleted: true })
+        .catch(async (err) => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: `sales/${id}`,
+            operation: 'update',
+            requestResourceData: { isDeleted: true }
+          }));
+        });
     }
   };
 
@@ -108,57 +126,61 @@ export default function SalesHistory() {
       </div>
 
       <Card className="border-primary/10 bg-white overflow-hidden shadow-sm">
-        <Table>
-          <TableHeader className="bg-primary/5">
-            <TableRow>
-              <TableHead className="font-bold">Sale ID</TableHead>
-              <TableHead className="font-bold">Customer</TableHead>
-              <TableHead className="font-bold">Date & Time</TableHead>
-              <TableHead className="font-bold">Items</TableHead>
-              <TableHead className="font-bold text-right">Total</TableHead>
-              <TableHead className="font-bold">Payment</TableHead>
-              <TableHead className="font-bold text-center">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredSales.map((sale) => (
-              <TableRow key={sale.id} className="hover:bg-primary/[0.02]">
-                <TableCell className="font-mono text-xs">{sale.id}</TableCell>
-                <TableCell className="font-bold">{sale.customerName}</TableCell>
-                <TableCell>
-                  <div className="flex items-center text-xs text-muted-foreground">
-                    <Calendar size={14} className="mr-1" />
-                    {new Date(sale.timestamp).toLocaleDateString()} {new Date(sale.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="space-y-1">
-                    {sale.items.map((item, idx) => (
-                      <div key={idx} className="text-xs">
-                        <Badge variant="secondary" className="mr-1 font-normal bg-primary/10 text-primary border-none">{item.quantity}x</Badge>
-                        {item.name}
-                      </div>
-                    ))}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right font-bold text-secondary">
-                  ${sale.total.toFixed(2)}
-                  {sale.discount > 0 && <p className="text-[10px] text-destructive">-${sale.discount} off</p>}
-                </TableCell>
-                <TableCell>
-                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-2">{sale.paymentMethod}</Badge>
-                </TableCell>
-                <TableCell className="text-center">
-                  <Button variant="ghost" size="icon" onClick={() => softDelete(sale.id)} className="text-muted-foreground hover:text-destructive">
-                    <Trash2 size={16} />
-                  </Button>
-                </TableCell>
+        {loading ? (
+          <div className="py-20 text-center animate-pulse">Loading records...</div>
+        ) : (
+          <Table>
+            <TableHeader className="bg-primary/5">
+              <TableRow>
+                <TableHead className="font-bold">Sale ID</TableHead>
+                <TableHead className="font-bold">Customer</TableHead>
+                <TableHead className="font-bold">Date & Time</TableHead>
+                <TableHead className="font-bold">Items</TableHead>
+                <TableHead className="font-bold text-right">Total</TableHead>
+                <TableHead className="font-bold">Payment</TableHead>
+                <TableHead className="font-bold text-center">Action</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredSales.map((sale) => (
+                <TableRow key={sale.id} className="hover:bg-primary/[0.02]">
+                  <TableCell className="font-mono text-xs">{sale.id}</TableCell>
+                  <TableCell className="font-bold">{sale.customerName}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center text-xs text-muted-foreground">
+                      <Calendar size={14} className="mr-1" />
+                      {sale.timestamp ? new Date(sale.timestamp).toLocaleDateString() : 'N/A'} {sale.timestamp ? new Date(sale.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      {sale.items.map((item, idx) => (
+                        <div key={idx} className="text-xs">
+                          <Badge variant="secondary" className="mr-1 font-normal bg-primary/10 text-primary border-none">{item.quantity}x</Badge>
+                          {item.name}
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-bold text-secondary">
+                    ${sale.total.toFixed(2)}
+                    {sale.discount > 0 && <p className="text-[10px] text-destructive">-${sale.discount} off</p>}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-2">{sale.paymentMethod}</Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Button variant="ghost" size="icon" onClick={() => softDelete(sale.id!)} className="text-muted-foreground hover:text-destructive">
+                      <Trash2 size={16} />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
         
-        {filteredSales.length === 0 && (
+        {!loading && filteredSales.length === 0 && (
           <div className="py-20 text-center">
             <p className="text-muted-foreground">No sales records found.</p>
           </div>

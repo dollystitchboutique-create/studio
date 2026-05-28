@@ -1,33 +1,45 @@
-
 "use client";
 
 import { useState } from 'react';
-import { INITIAL_PRODUCTS } from '@/lib/mock-data';
 import { Product, Sale, SaleItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { 
   ScanBarcode, 
-  Search, 
   ShoppingCart, 
   Plus, 
   Minus, 
   Trash2, 
   CreditCard,
   User,
-  Ticket
+  Ticket,
+  Tag as TagIcon
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { useToast } from '@/hooks/use-toast';
 
 export default function POSCheckout() {
+  const db = useFirestore();
+  const { toast } = useToast();
   const [skuSearch, setSkuSearch] = useState('');
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [customer, setCustomer] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Paylah' | 'PayNow'>('PayNow');
   const [discount, setDiscount] = useState(0);
 
-  const products = INITIAL_PRODUCTS.filter(p => !p.isDeleted);
+  const productsRef = useMemoFirebase(() => {
+    if (!db) return null;
+    return collection(db, 'products');
+  }, [db]);
+
+  const { data: allProducts } = useCollection<Product>(productsRef);
+  const products = allProducts.filter(p => !p.isDeleted);
 
   const addToCart = (product: Product) => {
     const existing = cart.find(item => item.sku === product.sku);
@@ -45,7 +57,7 @@ export default function POSCheckout() {
     if (product) {
       addToCart(product);
     } else {
-      alert('Product not found with SKU: ' + skuSearch);
+      toast({ variant: 'destructive', title: 'Error', description: 'Product not found.' });
     }
   };
 
@@ -67,36 +79,40 @@ export default function POSCheckout() {
   const total = Math.max(0, subtotal - discount);
 
   const handleCheckout = () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || !db) return;
     
-    const sale: Sale = {
-      id: 'S' + Date.now(),
+    const salePayload = {
       customerName: customer || 'Guest',
       paymentMethod,
       discount,
       total,
       items: cart,
-      timestamp: new Date().toISOString(),
+      timestamp: serverTimestamp(),
       isDeleted: false,
     };
 
-    console.log('Completing sale:', sale);
-    alert('Sale completed successfully! Total: $' + total.toFixed(2));
-    
-    // Reset
-    setCart([]);
-    setCustomer('');
-    setDiscount(0);
+    addDoc(collection(db, 'sales'), salePayload)
+      .then(() => {
+        toast({ title: 'Success', description: `Sale completed! Total: $${total.toFixed(2)}` });
+        setCart([]);
+        setCustomer('');
+        setDiscount(0);
+      })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'sales',
+          operation: 'create',
+          requestResourceData: salePayload
+        }));
+      });
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
       <div className="lg:col-span-2 space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 className="text-4xl font-headline text-primary">POS Checkout</h2>
-            <p className="text-muted-foreground mt-1">Start a new transaction.</p>
-          </div>
+        <div>
+          <h2 className="text-4xl font-headline text-primary">POS Checkout</h2>
+          <p className="text-muted-foreground mt-1">Start a new transaction.</p>
         </div>
 
         <Card className="border-primary/20 bg-white overflow-hidden">
@@ -163,7 +179,6 @@ export default function POSCheckout() {
           </CardContent>
         </Card>
 
-        {/* Quick select (Optional convenience) */}
         <div>
           <h3 className="font-headline text-xl text-primary mb-4 flex items-center gap-2">
             <TagIcon size={18} /> Popular Items

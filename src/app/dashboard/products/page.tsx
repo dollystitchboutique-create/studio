@@ -1,8 +1,6 @@
-
 "use client";
 
 import { useState } from 'react';
-import { INITIAL_PRODUCTS } from '@/lib/mock-data';
 import { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +11,6 @@ import {
   Search, 
   Trash2, 
   Image as ImageIcon,
-  Tag as TagIcon,
   Palette,
   Info
 } from 'lucide-react';
@@ -27,13 +24,23 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function ProductCatalogue() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const db = useFirestore();
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
-  // New product form state
+  const productsRef = useMemoFirebase(() => {
+    if (!db) return null;
+    return collection(db, 'products');
+  }, [db]);
+
+  const { data: products, loading } = useCollection<Product>(productsRef);
+
   const [newProd, setNewProd] = useState({
     name: '',
     category: 'Necklace',
@@ -51,32 +58,52 @@ export default function ProductCatalogue() {
 
   const generateSku = () => {
     const prefix = newProd.category.substring(0, 2).toUpperCase();
-    const colorCode = newProd.color.substring(0, 3).toUpperCase();
+    const colorCode = newProd.color.substring(0, 3).toUpperCase() || 'GEN';
     const rand = Math.floor(100 + Math.random() * 900);
     const sku = `${prefix}-${colorCode}-${rand}`;
     setNewProd({ ...newProd, sku });
   };
 
   const handleAddProduct = () => {
-    const prod: Product = {
-      id: Date.now().toString(),
+    if (!db) return;
+    
+    const payload = {
       sku: newProd.sku,
       name: newProd.name,
       category: newProd.category,
       spec: newProd.spec,
       color: newProd.color,
-      price: parseFloat(newProd.price),
+      price: parseFloat(newProd.price) || 0,
       description: newProd.description,
-      imageUrl: 'https://picsum.photos/seed/' + Date.now() + '/600/400',
+      imageUrl: `https://picsum.photos/seed/${Date.now()}/600/400`,
       isDeleted: false,
+      createdAt: serverTimestamp(),
     };
-    setProducts([...products, prod]);
+
+    addDoc(collection(db, 'products'), payload)
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'products',
+          operation: 'create',
+          requestResourceData: payload
+        }));
+      });
+
     setIsAdding(false);
     setNewProd({ name: '', category: 'Necklace', spec: '', color: '', price: '', description: '', sku: '' });
   };
 
   const softDelete = (id: string) => {
-    setProducts(products.map(p => p.id === id ? { ...p, isDeleted: true } : p));
+    if (!db) return;
+    const docRef = doc(db, 'products', id);
+    updateDoc(docRef, { isDeleted: true })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `products/${id}`,
+          operation: 'update',
+          requestResourceData: { isDeleted: true }
+        }));
+      });
   };
 
   return (
@@ -157,53 +184,59 @@ export default function ProductCatalogue() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProducts.map((p) => (
-          <Card key={p.id} className="group overflow-hidden border-primary/10 bg-white transition-all hover:shadow-xl hover:-translate-y-1">
-            <div className="aspect-[4/3] bg-muted relative overflow-hidden">
-              <img 
-                src={p.imageUrl} 
-                alt={p.name} 
-                className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
-              />
-              <Badge className="absolute top-3 right-3 bg-white/90 text-primary hover:bg-white">{p.category}</Badge>
-            </div>
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <CardTitle className="font-headline text-xl text-primary">{p.name}</CardTitle>
-                <span className="text-xl font-bold text-secondary">${p.price.toFixed(2)}</span>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map(i => <Card key={i} className="h-64 animate-pulse bg-primary/5" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredProducts.map((p) => (
+            <Card key={p.id} className="group overflow-hidden border-primary/10 bg-white transition-all hover:shadow-xl hover:-translate-y-1">
+              <div className="aspect-[4/3] bg-muted relative overflow-hidden">
+                <img 
+                  src={p.imageUrl} 
+                  alt={p.name} 
+                  className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                />
+                <Badge className="absolute top-3 right-3 bg-white/90 text-primary hover:bg-white">{p.category}</Badge>
               </div>
-              <p className="text-xs font-mono text-muted-foreground bg-primary/5 inline-block px-2 py-1 rounded">{p.sku}</p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground line-clamp-2">{p.description}</p>
-              <div className="flex flex-wrap gap-2 pt-2">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Palette size={12} /> {p.color}
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <CardTitle className="font-headline text-xl text-primary">{p.name}</CardTitle>
+                  <span className="text-xl font-bold text-secondary">${p.price.toFixed(2)}</span>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Info size={12} /> {p.spec}
+                <p className="text-xs font-mono text-muted-foreground bg-primary/5 inline-block px-2 py-1 rounded">{p.sku}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground line-clamp-2">{p.description}</p>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Palette size={12} /> {p.color}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Info size={12} /> {p.spec}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-            <CardFooter className="pt-0 flex justify-between">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
-                Edit
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-muted-foreground hover:text-destructive"
-                onClick={() => softDelete(p.id)}
-              >
-                <Trash2 size={16} className="mr-1" /> Remove
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+              <CardFooter className="pt-0 flex justify-between">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
+                  Edit
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => softDelete(p.id!)}
+                >
+                  <Trash2 size={16} className="mr-1" /> Remove
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
 
-      {filteredProducts.length === 0 && (
+      {!loading && filteredProducts.length === 0 && (
         <div className="text-center py-20 bg-white/50 rounded-2xl border-2 border-dashed border-primary/10">
           <ImageIcon className="mx-auto w-12 h-12 text-primary/20 mb-4" />
           <h3 className="text-xl font-headline text-primary/40">No products found</h3>
