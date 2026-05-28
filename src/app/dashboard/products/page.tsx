@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { generateInspiration } from '@/ai/flows/generate-inspiration-flow';
@@ -90,7 +90,7 @@ export default function ProductCatalogue() {
     if (!context) return;
     
     const prefix = context.category.substring(0, 2).toUpperCase();
-    const colorCode = context.color.substring(0, 3).toUpperCase() || 'GEN';
+    const colorCode = (context.color || 'GEN').substring(0, 3).toUpperCase();
     const rand = Math.floor(100 + Math.random() * 900);
     const sku = `${prefix}-${colorCode}-${rand}`;
     
@@ -194,10 +194,11 @@ export default function ProductCatalogue() {
       });
   };
 
-  const softDelete = (id: string) => {
+  const handleRemoveProduct = (id: string) => {
     if (!db) return;
-    if (confirm('Are you sure you want to remove this product?')) {
+    if (window.confirm('Are you sure you want to remove this product from the catalogue?')) {
       const docRef = doc(db, 'products', id);
+      // Using soft delete to maintain consistency with filters
       updateDoc(docRef, { isDeleted: true })
         .then(() => {
           toast({ title: "Removed", description: "Product removed from catalogue." });
@@ -496,7 +497,7 @@ export default function ProductCatalogue() {
                   variant="ghost" 
                   size="sm" 
                   className="text-muted-foreground hover:text-destructive"
-                  onClick={() => softDelete(p.id!)}
+                  onClick={() => handleRemoveProduct(p.id!)}
                 >
                   <Trash2 size={16} className="mr-1" /> Remove
                 </Button>

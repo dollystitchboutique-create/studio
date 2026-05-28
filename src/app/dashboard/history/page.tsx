@@ -79,9 +79,9 @@ export default function SalesHistory() {
     document.body.removeChild(link);
   };
 
-  const softDelete = (id: string) => {
+  const handleSoftDelete = (id: string) => {
     if (!db) return;
-    if(confirm('Are you sure you want to delete this sale record?')) {
+    if (window.confirm('Are you sure you want to delete this sale record?')) {
       const docRef = doc(db, 'sales', id);
       updateDoc(docRef, { isDeleted: true })
         .then(() => {
@@ -194,7 +194,12 @@ export default function SalesHistory() {
                       <Button variant="ghost" size="icon" onClick={() => setSelectedSale(sale)} className="h-7 w-7 text-primary hover:bg-primary/5">
                         <Eye size={14} />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => softDelete(sale.id!)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleSoftDelete(sale.id!)} 
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      >
                         <Trash2 size={14} />
                       </Button>
                     </div>
