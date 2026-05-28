@@ -1,0 +1,29 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "necklace-1",
+      "description": "Handmade gold necklace",
+      "imageUrl": "https://picsum.photos/seed/necklace1/600/400",
+      "imageHint": "gold necklace"
+    },
+    {
+      "id": "earrings-1",
+      "description": "Pearl artisanal earrings",
+      "imageUrl": "https://picsum.photos/seed/earrings1/600/400",
+      "imageHint": "pearl earrings"
+    },
+    {
+      "id": "bracelet-1",
+      "description": "Rose gold bracelet",
+      "imageUrl": "https://picsum.photos/seed/bracelet1/600/400",
+      "imageHint": "rose gold bracelet"
+    },
+    {
+      "id": "ring-1",
+      "description": "Diamond silver ring",
+      "imageUrl": "https://picsum.photos/seed/ring1/600/400",
+      "imageHint": "silver ring"
+    }
+  ]
+}
