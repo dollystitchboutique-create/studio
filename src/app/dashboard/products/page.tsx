@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { generateInspiration } from '@/ai/flows/generate-inspiration-flow';
@@ -52,6 +52,7 @@ export default function ProductCatalogue() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isInspiring, setIsInspiring] = useState(false);
   const [inspirationPrompt, setInspirationPrompt] = useState('');
@@ -129,13 +130,14 @@ export default function ProductCatalogue() {
     }
   };
 
-  const handleAddProduct = () => {
-    if (!db) return;
+  const handleAddProduct = async () => {
+    if (!db || isSubmitting) return;
     if (!newProd.sku || !newProd.name || !newProd.price) {
       toast({ variant: 'destructive', title: 'Error', description: 'SKU, Name, and Price are required.' });
       return;
     }
     
+    setIsSubmitting(true);
     const payload = {
       sku: newProd.sku,
       name: newProd.name,
@@ -150,24 +152,27 @@ export default function ProductCatalogue() {
       createdAt: serverTimestamp(),
     };
 
-    addDoc(collection(db, 'products'), payload)
-      .then(() => {
-        toast({ title: 'Success', description: 'Product added to catalogue.' });
-        setIsAdding(false);
-        setNewProd({ name: '', category: CATEGORIES[0], spec: '', color: '', price: '', quantity: '1', sku: '', imageUrl: '' });
-      })
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'products',
-          operation: 'create',
-          requestResourceData: payload
-        }));
-      });
+    try {
+      await addDoc(collection(db, 'products'), payload);
+      toast({ title: 'Success', description: 'Product added to catalogue.' });
+      setIsAdding(false);
+      setNewProd({ name: '', category: CATEGORIES[0], spec: '', color: '', price: '', quantity: '1', sku: '', imageUrl: '' });
+    } catch (err: any) {
+      console.error("Error adding product:", err);
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'products',
+        operation: 'create',
+        requestResourceData: payload
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleUpdateProduct = () => {
-    if (!db || !editingProduct || !editingProduct.id) return;
+  const handleUpdateProduct = async () => {
+    if (!db || !editingProduct || !editingProduct.id || isSubmitting) return;
     
+    setIsSubmitting(true);
     const docRef = doc(db, 'products', editingProduct.id);
     const updateData = {
       sku: editingProduct.sku,
@@ -180,25 +185,26 @@ export default function ProductCatalogue() {
       imageUrl: editingProduct.imageUrl,
     };
 
-    updateDoc(docRef, updateData)
-      .then(() => {
-        toast({ title: 'Success', description: 'Product updated.' });
-        setEditingProduct(null);
-      })
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `products/${editingProduct.id}`,
-          operation: 'update',
-          requestResourceData: updateData
-        }));
-      });
+    try {
+      await updateDoc(docRef, updateData);
+      toast({ title: 'Success', description: 'Product updated.' });
+      setEditingProduct(null);
+    } catch (err: any) {
+      console.error("Error updating product:", err);
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `products/${editingProduct.id}`,
+        operation: 'update',
+        requestResourceData: updateData
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleRemoveProduct = (id: string) => {
     if (!db) return;
     if (window.confirm('Are you sure you want to remove this product from the catalogue?')) {
       const docRef = doc(db, 'products', id);
-      // Using soft delete to maintain consistency with filters
       updateDoc(docRef, { isDeleted: true })
         .then(() => {
           toast({ title: "Removed", description: "Product removed from catalogue." });
@@ -275,8 +281,11 @@ export default function ProductCatalogue() {
                   <div className="col-span-full">
                     <Label>Product Picture</Label>
                     <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="mt-2 border-2 border-dashed border-primary/20 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all overflow-hidden relative"
+                      onClick={() => !isSubmitting && fileInputRef.current?.click()}
+                      className={cn(
+                        "mt-2 border-2 border-dashed border-primary/20 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all overflow-hidden relative",
+                        isSubmitting && "opacity-50 cursor-not-allowed"
+                      )}
                     >
                       {newProd.imageUrl ? (
                         <img src={newProd.imageUrl} alt="Preview" className="w-full h-full object-cover" />
@@ -292,16 +301,18 @@ export default function ProductCatalogue() {
                         className="hidden" 
                         accept="image/*" 
                         onChange={(e) => handleImageUpload(e, 'new')}
+                        disabled={isSubmitting}
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Product Name</Label>
-                    <Input value={newProd.name} onChange={e => setNewProd({...newProd, name: e.target.value})} placeholder="e.g. Sapphire Dream" />
+                    <Input disabled={isSubmitting} value={newProd.name} onChange={e => setNewProd({...newProd, name: e.target.value})} placeholder="e.g. Sapphire Dream" />
                   </div>
                   <div className="space-y-2">
                     <Label>Category</Label>
                     <select 
+                      disabled={isSubmitting}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       value={newProd.category} 
                       onChange={e => setNewProd({...newProd, category: e.target.value})}
@@ -313,39 +324,42 @@ export default function ProductCatalogue() {
                   </div>
                   <div className="space-y-2">
                     <Label>Color / Material</Label>
-                    <Input value={newProd.color} onChange={e => setNewProd({...newProd, color: e.target.value})} placeholder="e.g. Gold / Silver" />
+                    <Input disabled={isSubmitting} value={newProd.color} onChange={e => setNewProd({...newProd, color: e.target.value})} placeholder="e.g. Gold / Silver" />
                   </div>
                   <div className="space-y-2">
                     <Label>Specification</Label>
-                    <Input value={newProd.spec} onChange={e => setNewProd({...newProd, spec: e.target.value})} placeholder="e.g. 18k Plated" />
+                    <Input disabled={isSubmitting} value={newProd.spec} onChange={e => setNewProd({...newProd, spec: e.target.value})} placeholder="e.g. 18k Plated" />
                   </div>
                   <div className="space-y-2">
                     <Label>Price ($)</Label>
-                    <Input type="number" value={newProd.price} onChange={e => setNewProd({...newProd, price: e.target.value})} placeholder="0.00" />
+                    <Input disabled={isSubmitting} type="number" value={newProd.price} onChange={e => setNewProd({...newProd, price: e.target.value})} placeholder="0.00" />
                   </div>
                   <div className="space-y-2">
                     <Label>Quantity (In Stock)</Label>
-                    <Input type="number" value={newProd.quantity} onChange={e => setNewProd({...newProd, quantity: e.target.value})} placeholder="1" />
+                    <Input disabled={isSubmitting} type="number" value={newProd.quantity} onChange={e => setNewProd({...newProd, quantity: e.target.value})} placeholder="1" />
                   </div>
                   <div className="space-y-2 col-span-full">
                     <Label>SKU (Auto-suggested)</Label>
                     <div className="flex gap-2">
-                      <Input value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
-                      <Button variant="outline" size="sm" onClick={() => generateSku('new')}>Generate</Button>
+                      <Input disabled={isSubmitting} value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
+                      <Button disabled={isSubmitting} variant="outline" size="sm" onClick={() => generateSku('new')}>Generate</Button>
                     </div>
                   </div>
                 </div>
               </div>
               <DialogFooter className="pt-4 border-t mt-4">
-                <Button variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
-                <Button className="bg-primary" onClick={handleAddProduct}>Save Product</Button>
+                <Button variant="outline" disabled={isSubmitting} onClick={() => setIsAdding(false)}>Cancel</Button>
+                <Button className="bg-primary min-w-[120px]" disabled={isSubmitting} onClick={handleAddProduct}>
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Save Product
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
-      <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
+      <Dialog open={!!editingProduct} onOpenChange={() => !isSubmitting && setEditingProduct(null)}>
         <DialogContent className="max-w-2xl bg-white flex flex-col max-h-[95vh]">
           <DialogHeader>
             <DialogTitle className="font-headline text-2xl text-primary">Edit Item</DialogTitle>
@@ -356,8 +370,11 @@ export default function ProductCatalogue() {
                 <div className="col-span-full">
                   <Label>Product Picture</Label>
                   <div 
-                    onClick={() => editFileInputRef.current?.click()}
-                    className="mt-2 border-2 border-dashed border-primary/20 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all overflow-hidden relative"
+                    onClick={() => !isSubmitting && editFileInputRef.current?.click()}
+                    className={cn(
+                      "mt-2 border-2 border-dashed border-primary/20 rounded-2xl aspect-video flex flex-col items-center justify-center cursor-pointer hover:bg-primary/5 transition-all overflow-hidden relative",
+                      isSubmitting && "opacity-50 cursor-not-allowed"
+                    )}
                   >
                     {editingProduct.imageUrl ? (
                       <img src={editingProduct.imageUrl} alt="Preview" className="w-full h-full object-cover" />
@@ -373,16 +390,18 @@ export default function ProductCatalogue() {
                       className="hidden" 
                       accept="image/*" 
                       onChange={(e) => handleImageUpload(e, 'edit')}
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Product Name</Label>
-                  <Input value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
+                  <Input disabled={isSubmitting} value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Category</Label>
                   <select 
+                    disabled={isSubmitting}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     value={editingProduct.category} 
                     onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}
@@ -394,33 +413,36 @@ export default function ProductCatalogue() {
                 </div>
                 <div className="space-y-2">
                   <Label>Color / Material</Label>
-                  <Input value={editingProduct.color} onChange={e => setEditingProduct({...editingProduct, color: e.target.value})} />
+                  <Input disabled={isSubmitting} value={editingProduct.color} onChange={e => setEditingProduct({...editingProduct, color: e.target.value})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Specification</Label>
-                  <Input value={editingProduct.spec} onChange={e => setEditingProduct({...editingProduct, spec: e.target.value})} />
+                  <Input disabled={isSubmitting} value={editingProduct.spec} onChange={e => setEditingProduct({...editingProduct, spec: e.target.value})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Price ($)</Label>
-                  <Input type="number" value={editingProduct.price} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value) || 0})} />
+                  <Input disabled={isSubmitting} type="number" value={editingProduct.price} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value) || 0})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Quantity (In Stock)</Label>
-                  <Input type="number" value={editingProduct.quantity} onChange={e => setEditingProduct({...editingProduct, quantity: parseInt(e.target.value) || 0})} />
+                  <Input disabled={isSubmitting} type="number" value={editingProduct.quantity} onChange={e => setEditingProduct({...editingProduct, quantity: parseInt(e.target.value) || 0})} />
                 </div>
                 <div className="space-y-2 col-span-full">
                   <Label>SKU</Label>
                   <div className="flex gap-2">
-                    <Input value={editingProduct.sku} onChange={e => setEditingProduct({...editingProduct, sku: e.target.value})} />
-                    <Button variant="outline" size="sm" onClick={() => generateSku('edit')}>Generate</Button>
+                    <Input disabled={isSubmitting} value={editingProduct.sku} onChange={e => setEditingProduct({...editingProduct, sku: e.target.value})} />
+                    <Button disabled={isSubmitting} variant="outline" size="sm" onClick={() => generateSku('edit')}>Generate</Button>
                   </div>
                 </div>
               </div>
             </div>
           )}
           <DialogFooter className="pt-4 border-t mt-4">
-            <Button variant="outline" onClick={() => setEditingProduct(null)}>Cancel</Button>
-            <Button className="bg-primary" onClick={handleUpdateProduct}>Save Changes</Button>
+            <Button variant="outline" disabled={isSubmitting} onClick={() => setEditingProduct(null)}>Cancel</Button>
+            <Button className="bg-primary min-w-[120px]" disabled={isSubmitting} onClick={handleUpdateProduct}>
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
