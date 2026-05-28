@@ -22,7 +22,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from '@/hooks/use-toast';
@@ -70,6 +70,10 @@ export default function POSCheckout() {
     e.preventDefault();
     const product = products.find(p => p.sku.toLowerCase() === skuSearch.toLowerCase());
     if (product) {
+      if (product.quantity <= 0) {
+        toast({ variant: 'destructive', title: 'Out of Stock', description: `${product.name} is currently out of stock.` });
+        return;
+      }
       addToCart(product);
     } else {
       toast({ variant: 'destructive', title: 'Error', description: 'Product not found.' });
@@ -110,6 +114,11 @@ export default function POSCheckout() {
 
   const confirmMatchedProduct = () => {
     if (matchedProduct) {
+      if (matchedProduct.quantity <= 0) {
+        toast({ variant: 'destructive', title: 'Out of Stock', description: `${matchedProduct.name} is currently out of stock.` });
+        setMatchedProduct(null);
+        return;
+      }
       addToCart(matchedProduct);
       setMatchedProduct(null);
       toast({ title: 'Success', description: `${matchedProduct.name} added to cart.` });
@@ -117,9 +126,16 @@ export default function POSCheckout() {
   };
 
   const updateQuantity = (sku: string, delta: number) => {
+    const product = products.find(p => p.sku === sku);
+    if (!product) return;
+
     setCart(cart.map(item => {
       if (item.sku === sku) {
         const newQty = Math.max(1, item.quantity + delta);
+        if (newQty > product.quantity) {
+          toast({ variant: 'destructive', title: 'Limit Reached', description: `Only ${product.quantity} units available.` });
+          return item;
+        }
         return { ...item, quantity: newQty };
       }
       return item;
@@ -148,6 +164,23 @@ export default function POSCheckout() {
 
     addDoc(collection(db, 'sales'), salePayload)
       .then(() => {
+        // Deduct stock for each item in cart
+        cart.forEach(item => {
+          const product = products.find(p => p.sku === item.sku);
+          if (product && product.id) {
+            const productRef = doc(db, 'products', product.id);
+            updateDoc(productRef, {
+              quantity: Math.max(0, product.quantity - item.quantity)
+            }).catch(async (err) => {
+              errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: `products/${product.id}`,
+                operation: 'update',
+                requestResourceData: { quantity: Math.max(0, product.quantity - item.quantity) }
+              }));
+            });
+          }
+        });
+
         toast({ title: 'Success', description: `Sale completed! Total: $${total.toFixed(2)}` });
         setCart([]);
         setCustomer('');
@@ -268,12 +301,13 @@ export default function POSCheckout() {
                   <h3 className="font-bold text-xl">{matchedProduct.name}</h3>
                   <p className="text-muted-foreground font-mono">{matchedProduct.sku}</p>
                   <p className="text-2xl font-bold text-secondary mt-2">${matchedProduct.price.toFixed(2)}</p>
+                  {matchedProduct.quantity <= 0 && <Badge variant="destructive" className="mt-2">Out of Stock</Badge>}
                 </div>
               </div>
             )}
             <DialogFooter className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => setMatchedProduct(null)}>Cancel</Button>
-              <Button className="flex-1 bg-primary" onClick={confirmMatchedProduct}>Add to Cart</Button>
+              <Button className="flex-1 bg-primary" onClick={confirmMatchedProduct} disabled={matchedProduct?.quantity <= 0}>Add to Cart</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -283,7 +317,7 @@ export default function POSCheckout() {
             <TagIcon size={18} /> Popular Items
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {products.slice(0, 4).map(p => (
+            {products.filter(p => p.quantity > 0).slice(0, 4).map(p => (
               <button 
                 key={p.id}
                 onClick={() => addToCart(p)}

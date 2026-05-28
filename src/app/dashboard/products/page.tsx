@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef } from 'react';
@@ -36,6 +35,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { generateInspiration } from '@/ai/flows/generate-inspiration-flow';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
   'arm cuff',
@@ -77,10 +77,14 @@ export default function ProductCatalogue() {
     imageUrl: '',
   });
 
-  const filteredProducts = products.filter(p => 
-    !p.isDeleted && 
-    (p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Sort products so that out-of-stock items (quantity <= 0) are at the bottom
+  const filteredProducts = products
+    .filter(p => !p.isDeleted && (p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase())))
+    .sort((a, b) => {
+      if (a.quantity > 0 && b.quantity <= 0) return -1;
+      if (a.quantity <= 0 && b.quantity > 0) return 1;
+      return 0;
+    });
 
   const generateSku = (target: 'new' | 'edit') => {
     const context = target === 'new' ? newProd : editingProduct;
@@ -435,7 +439,13 @@ export default function ProductCatalogue() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProducts.map((p) => (
-            <Card key={p.id} className="group overflow-hidden border-primary/10 bg-white transition-all hover:shadow-xl hover:-translate-y-1">
+            <Card 
+              key={p.id} 
+              className={cn(
+                "group overflow-hidden border-primary/10 bg-white transition-all hover:shadow-xl hover:-translate-y-1",
+                p.quantity <= 0 && "opacity-60 grayscale-[0.5]"
+              )}
+            >
               <div className="aspect-[4/3] bg-muted relative overflow-hidden">
                 <img 
                   src={p.imageUrl} 
@@ -443,7 +453,9 @@ export default function ProductCatalogue() {
                   className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
                 />
                 <Badge className="absolute top-3 right-3 bg-white/90 text-primary hover:bg-white capitalize">{p.category}</Badge>
-                {p.quantity <= 3 && (
+                {p.quantity <= 0 ? (
+                  <Badge variant="destructive" className="absolute top-3 left-3 bg-red-600">OUT OF STOCK</Badge>
+                ) : p.quantity <= 3 && (
                   <Badge variant="destructive" className="absolute top-3 left-3">Low Stock: {p.quantity}</Badge>
                 )}
               </div>
@@ -454,7 +466,7 @@ export default function ProductCatalogue() {
                 </div>
                 <div className="flex justify-between items-center mt-1">
                   <p className="text-xs font-mono text-muted-foreground bg-primary/5 inline-block px-2 py-1 rounded">{p.sku}</p>
-                  <Badge variant="outline" className="flex gap-1 items-center font-normal">
+                  <Badge variant="outline" className={cn("flex gap-1 items-center font-normal", p.quantity <= 0 && "text-destructive border-destructive")}>
                     <Package size={12} /> {p.quantity} units
                   </Badge>
                 </div>
