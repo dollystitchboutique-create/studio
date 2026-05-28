@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -18,7 +19,8 @@ import {
   Trash2, 
   Calendar,
   Filter,
-  DollarSign
+  DollarSign,
+  Eye
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,10 +28,18 @@ import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 export default function SalesHistory() {
   const db = useFirestore();
   const [search, setSearch] = useState('');
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
   const salesQuery = useMemoFirebase(() => {
     if (!db) return null;
@@ -87,7 +97,7 @@ export default function SalesHistory() {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-4xl font-headline text-primary">Sales History</h2>
+          <h2 className="text-4xl font-headline text-primary">Sales Log</h2>
           <p className="text-muted-foreground mt-1">Detailed log of all customer transactions.</p>
         </div>
         
@@ -164,15 +174,19 @@ export default function SalesHistory() {
                   </TableCell>
                   <TableCell className="text-right font-bold text-secondary">
                     ${sale.total.toFixed(2)}
-                    {sale.discount > 0 && <p className="text-[10px] text-destructive">-${sale.discount} off</p>}
                   </TableCell>
                   <TableCell>
                     <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-2">{sale.paymentMethod}</Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Button variant="ghost" size="icon" onClick={() => softDelete(sale.id!)} className="text-muted-foreground hover:text-destructive">
-                      <Trash2 size={16} />
-                    </Button>
+                    <div className="flex justify-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => setSelectedSale(sale)} className="text-primary hover:bg-primary/5">
+                        <Eye size={16} />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => softDelete(sale.id!)} className="text-muted-foreground hover:text-destructive">
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -186,6 +200,45 @@ export default function SalesHistory() {
           </div>
         )}
       </Card>
+
+      <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
+        <DialogContent className="bg-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-headline text-2xl text-primary">Transaction Receipt</DialogTitle>
+            <DialogDescription>Details for Sale {selectedSale?.id}</DialogDescription>
+          </DialogHeader>
+          {selectedSale && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4 text-sm py-4 border-y border-dashed border-primary/20">
+                <div>
+                  <p className="text-muted-foreground font-bold uppercase text-[10px]">Customer</p>
+                  <p className="font-bold">{selectedSale.customerName}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-muted-foreground font-bold uppercase text-[10px]">Payment</p>
+                  <p className="font-bold">{selectedSale.paymentMethod}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <p className="text-xs font-bold uppercase text-muted-foreground">Items Ordered</p>
+                {selectedSale.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-sm">
+                    <span>{item.quantity}x {item.name}</span>
+                    <span className="font-bold">${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-4 border-t border-primary/10 flex justify-between items-center">
+                <span className="text-lg font-headline text-primary">Total Amount</span>
+                <span className="text-2xl font-bold text-secondary">${selectedSale.total.toFixed(2)}</span>
+              </div>
+              <Button className="w-full bg-primary" onClick={() => window.print()}>
+                Print Receipt
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

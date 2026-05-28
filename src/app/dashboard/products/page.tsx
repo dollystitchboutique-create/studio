@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -14,7 +15,8 @@ import {
   Palette,
   Info,
   Sparkles,
-  Loader2
+  Loader2,
+  Wand2
 } from 'lucide-react';
 import {
   Dialog,
@@ -31,6 +33,7 @@ import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/fi
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { generateJewelryDescription } from '@/ai/flows/generate-description-flow';
+import { generateInspiration } from '@/ai/flows/generate-inspiration-flow';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ProductCatalogue() {
@@ -39,6 +42,9 @@ export default function ProductCatalogue() {
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isInspiring, setIsInspiring] = useState(false);
+  const [inspirationPrompt, setInspirationPrompt] = useState('');
+  const [generatedInspiration, setGeneratedInspiration] = useState<string | null>(null);
 
   const productsRef = useMemoFirebase(() => {
     if (!db) return null;
@@ -88,6 +94,19 @@ export default function ProductCatalogue() {
       toast({ variant: 'destructive', title: 'AI Error', description: 'Could not generate description.' });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateInspiration = async () => {
+    if (!inspirationPrompt) return;
+    setIsInspiring(true);
+    try {
+      const result = await generateInspiration({ prompt: inspirationPrompt });
+      setGeneratedInspiration(result.imageUrl);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Design Error', description: 'Could not generate design inspiration.' });
+    } finally {
+      setIsInspiring(false);
     }
   };
 
@@ -141,76 +160,116 @@ export default function ProductCatalogue() {
           <p className="text-muted-foreground mt-1">Manage your jewelry inventory and SKUs.</p>
         </div>
         
-        <Dialog open={isAdding} onOpenChange={setIsAdding}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary hover:bg-secondary">
-              <Plus className="mr-2 h-4 w-4" /> Add Product
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl bg-white">
-            <DialogHeader>
-              <DialogTitle className="font-headline text-2xl text-primary">Add New Jewelry Piece</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-              <div className="space-y-2">
-                <Label>Product Name</Label>
-                <Input value={newProd.name} onChange={e => setNewProd({...newProd, name: e.target.value})} placeholder="e.g. Sapphire Dream" />
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <select 
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={newProd.category} 
-                  onChange={e => setNewProd({...newProd, category: e.target.value})}
+        <div className="flex gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="border-primary text-primary hover:bg-primary/5">
+                <Wand2 className="mr-2 h-4 w-4" /> AI Design Lab
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-xl bg-white">
+              <DialogHeader>
+                <DialogTitle className="font-headline text-2xl text-primary flex items-center gap-2">
+                  <Sparkles className="h-5 w-5" /> Design Inspiration
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Describe a new jewelry concept</Label>
+                  <Input 
+                    placeholder="e.g. A celestial necklace with moonstone and silver stars"
+                    value={inspirationPrompt}
+                    onChange={e => setInspirationPrompt(e.target.value)}
+                  />
+                </div>
+                {generatedInspiration && (
+                  <div className="rounded-2xl overflow-hidden border border-primary/10 aspect-video bg-muted relative">
+                    <img src={generatedInspiration} alt="AI Inspiration" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <Button 
+                  className="w-full bg-primary" 
+                  onClick={handleGenerateInspiration}
+                  disabled={isInspiring || !inspirationPrompt}
                 >
-                  <option>Necklace</option>
-                  <option>Earrings</option>
-                  <option>Bracelet</option>
-                  <option>Ring</option>
-                </select>
+                  {isInspiring ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                  {isInspiring ? 'Designing...' : 'Imagine Design'}
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>Color / Material</Label>
-                <Input value={newProd.color} onChange={e => setNewProd({...newProd, color: e.target.value})} placeholder="e.g. Gold / Silver" />
-              </div>
-              <div className="space-y-2">
-                <Label>Specification</Label>
-                <Input value={newProd.spec} onChange={e => setNewProd({...newProd, spec: e.target.value})} placeholder="e.g. 18k Plated" />
-              </div>
-              <div className="space-y-2">
-                <Label>Price ($)</Label>
-                <Input type="number" value={newProd.price} onChange={e => setNewProd({...newProd, price: e.target.value})} placeholder="0.00" />
-              </div>
-              <div className="space-y-2">
-                <Label>SKU (Auto-suggested)</Label>
-                <div className="flex gap-2">
-                  <Input value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
-                  <Button variant="outline" size="sm" onClick={generateSku}>Generate</Button>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isAdding} onOpenChange={setIsAdding}>
+            <DialogTrigger asChild>
+              <Button className="bg-primary hover:bg-secondary">
+                <Plus className="mr-2 h-4 w-4" /> Add Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl bg-white">
+              <DialogHeader>
+                <DialogTitle className="font-headline text-2xl text-primary">Add New Jewelry Piece</DialogTitle>
+              </DialogHeader>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                <div className="space-y-2">
+                  <Label>Product Name</Label>
+                  <Input value={newProd.name} onChange={e => setNewProd({...newProd, name: e.target.value})} placeholder="e.g. Sapphire Dream" />
                 </div>
-              </div>
-              <div className="col-span-full space-y-2">
-                <div className="flex justify-between items-center">
-                  <Label>Description</Label>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleAiDescription} 
-                    disabled={isGenerating}
-                    className="text-primary hover:text-secondary h-8 gap-1"
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <select 
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={newProd.category} 
+                    onChange={e => setNewProd({...newProd, category: e.target.value})}
                   >
-                    {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    Generate with AI
-                  </Button>
+                    <option>Necklace</option>
+                    <option>Earrings</option>
+                    <option>Bracelet</option>
+                    <option>Ring</option>
+                  </select>
                 </div>
-                <Textarea value={newProd.description} onChange={e => setNewProd({...newProd, description: e.target.value})} placeholder="Describe this masterpiece..." className="min-h-[100px]" />
+                <div className="space-y-2">
+                  <Label>Color / Material</Label>
+                  <Input value={newProd.color} onChange={e => setNewProd({...newProd, color: e.target.value})} placeholder="e.g. Gold / Silver" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Specification</Label>
+                  <Input value={newProd.spec} onChange={e => setNewProd({...newProd, spec: e.target.value})} placeholder="e.g. 18k Plated" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Price ($)</Label>
+                  <Input type="number" value={newProd.price} onChange={e => setNewProd({...newProd, price: e.target.value})} placeholder="0.00" />
+                </div>
+                <div className="space-y-2">
+                  <Label>SKU (Auto-suggested)</Label>
+                  <div className="flex gap-2">
+                    <Input value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
+                    <Button variant="outline" size="sm" onClick={generateSku}>Generate</Button>
+                  </div>
+                </div>
+                <div className="col-span-full space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Label>Description</Label>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleAiDescription} 
+                      disabled={isGenerating}
+                      className="text-primary hover:text-secondary h-8 gap-1"
+                    >
+                      {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      Generate with AI
+                    </Button>
+                  </div>
+                  <Textarea value={newProd.description} onChange={e => setNewProd({...newProd, description: e.target.value})} placeholder="Describe this masterpiece..." className="min-h-[100px]" />
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
-              <Button className="bg-primary" onClick={handleAddProduct}>Save Product</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
+                <Button className="bg-primary" onClick={handleAddProduct}>Save Product</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="relative max-w-md">
