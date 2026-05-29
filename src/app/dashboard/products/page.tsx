@@ -49,13 +49,13 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_PREFIXES: Record<string, string> = {
-  'arm cuff': 'AC',
-  'ear cuff': 'EC',
-  'custom': 'CS',
-  'keychain': 'KC',
-  'phone chain': 'PC',
-  'hair clip': 'HC',
-  'bracelet': 'BR'
+  'arm cuff': 'ARCF',
+  'ear cuff': 'ERCF',
+  'custom': 'CSTM',
+  'keychain': 'KYCH',
+  'phone chain': 'PHCH',
+  'hair clip': 'CLIP',
+  'bracelet': 'BRAC'
 };
 
 // Utility to compress images to ensure they fit within Firestore's 1MB limit
@@ -128,7 +128,6 @@ export default function ProductCatalogue() {
       p.category.toLowerCase().includes(search.toLowerCase())
     ));
 
-  // Group by category
   const groupedProducts = filteredProducts.reduce((acc, product) => {
     const category = product.category || 'Other';
     if (!acc[category]) acc[category] = [];
@@ -142,10 +141,17 @@ export default function ProductCatalogue() {
     const context = target === 'new' ? newProd : editingProduct;
     if (!context) return;
     
-    const prefix = CATEGORY_PREFIXES[context.category] || context.category.substring(0, 2).toUpperCase();
-    const colorCode = (context.color || 'GEN').substring(0, 3).toUpperCase();
-    const rand = Math.floor(100 + Math.random() * 899); // 3 digit random
-    const sku = `${prefix}-${colorCode}-${rand}`;
+    const getCode = (str: string) => {
+      const clean = str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      if (clean.length >= 4) return clean.substring(0, 4);
+      return clean.padEnd(4, 'X');
+    };
+
+    const prefix = CATEGORY_PREFIXES[context.category] || getCode(context.category);
+    const colorCode = context.color ? getCode(context.color) : 'COLR';
+    const specCode = context.spec ? getCode(context.spec) : Math.floor(1000 + Math.random() * 8999).toString();
+    
+    const sku = `${prefix}-${colorCode}-${specCode}`;
     
     if (target === 'new') {
       setNewProd({ ...newProd, sku });
@@ -396,7 +402,7 @@ export default function ProductCatalogue() {
                   <div className="space-y-2 col-span-full">
                     <Label>SKU (Auto-suggested)</Label>
                     <div className="flex gap-2">
-                      <Input disabled={isSubmitting} value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="SKU-XXXX" />
+                      <Input disabled={isSubmitting} value={newProd.sku} onChange={e => setNewProd({...newProd, sku: e.target.value})} placeholder="XXXX-XXXX-XXXX" />
                       <Button type="button" disabled={isSubmitting} variant="outline" size="sm" onClick={() => generateSku('new')}>Suggest SKU</Button>
                     </div>
                   </div>
